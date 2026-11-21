@@ -49,7 +49,7 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
   <input id="sym" value="BTCUSDT" aria-label="คู่เหรียญ">
   <select id="style" aria-label="สไตล์การเทรด"></select>
   <select id="tf" aria-label="Timeframe"><option>1m</option><option>5m</option><option>15m</option><option>30m</option><option>1h</option><option selected>4h</option><option>1d</option><option>1w</option></select>
-  <select id="bars" aria-label="จำนวนแท่ง"><option value="1000">1000 แท่ง</option><option value="2000" selected>2000 แท่ง</option><option value="5000">5000 แท่ง</option><option value="10000">10000 แท่ง</option><option value="20000">20000 แท่ง (4h ≈ 9 ปี)</option></select>
+  <select id="bars" aria-label="จำนวนแท่ง"><option value="1000">1000 แท่ง</option><option value="2000">2000 แท่ง</option><option value="5000">5000 แท่ง</option><option value="10000" selected>10000 แท่ง</option><option value="20000">20000 แท่ง (4h ≈ 9 ปี)</option></select>
   <button class="pri" id="load">โหลด / วิเคราะห์</button>
   <span id="evTop" class="r" style="font-size:13px"></span>
   <span id="status">ยังไม่ได้โหลดข้อมูล</span>
@@ -839,7 +839,8 @@ function renderDecision() {
   const fd = Object.keys(fngMap).sort(), fv = fngMap[fd[fd.length - 1]], items = [];
   const add = (ok, text, hard) => items.push({ ok, text, hard });
   add(!ev, ev ? `มีข่าวแรง "${ev.title}" ใกล้ประกาศ (ราคาอาจกระชาก)` : 'ไม่มีข่าวแรงภายใน 2 ชม.', true);
-  add(!!btStat && btStat.avgR > 0 && btStat.n >= 20, btStat ? `Backtest เหรียญนี้ด้วยค่าตั้งปัจจุบัน: ${fmt(btStat.avgR, 2)}R/ไม้ จาก ${btStat.n} เทรด` : 'ยังไม่มีผล backtest', true);
+  if (btStat && btStat.n < 30) add(btStat.avgR > 0, `Backtest เหรียญนี้: ${fmt(btStat.avgR, 2)}R/ไม้ จาก ${btStat.n} เทรด (ข้อมูลน้อย ควรเพิ่มจำนวนแท่งเป็น 10000+)`, false);
+  else add(!!btStat && btStat.avgR > 0, btStat ? `Backtest เหรียญนี้ด้วยค่าตั้งปัจจุบัน: ${fmt(btStat.avgR, 2)}R/ไม้ จาก ${btStat.n} เทรด` : 'ยังไม่มีผล backtest', true);
   add(tfOk, tfOk ? `Timeframe ${tf} (ผ่านการทดสอบย้อนหลัง)` : `Timeframe ${tf} เล็กเกินไป (ทดสอบแล้วขาดทุนเพราะต้นทุน)`, false);
   if (dir) {
     add(true, `สัญญาณ ${dir === 1 ? 'Long' : 'Short'} ผ่านตัวกรองที่เปิดไว้ทั้งหมด`, true);
