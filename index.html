@@ -46,9 +46,10 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
   <h1>Crypto Signal Lab</h1>
   <input id="sym" value="BTCUSDT" aria-label="คู่เหรียญ">
   <select id="style" aria-label="สไตล์การเทรด"></select>
-  <select id="tf" aria-label="Timeframe"><option>1m</option><option>5m</option><option>15m</option><option>30m</option><option selected>1h</option><option>4h</option><option>1d</option><option>1w</option></select>
+  <select id="tf" aria-label="Timeframe"><option>1m</option><option>5m</option><option>15m</option><option>30m</option><option>1h</option><option selected>4h</option><option>1d</option><option>1w</option></select>
   <select id="bars" aria-label="จำนวนแท่ง"><option value="1000">1000 แท่ง</option><option value="2000" selected>2000 แท่ง</option><option value="5000">5000 แท่ง</option></select>
   <button class="pri" id="load">โหลด / วิเคราะห์</button>
+  <span id="evTop" class="r" style="font-size:13px"></span>
   <span id="status">ยังไม่ได้โหลดข้อมูล</span>
 </header>
 <main>
@@ -60,6 +61,16 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
       <div class="note">คะแนน = ผลโหวตของ 16 อินดิเคเตอร์ (−100 ขาลงทั้งหมด … +100 ขาขึ้นทั้งหมด) · สัญญาณ = ตามกลยุทธ์ที่เลือก ภายใน 3 แท่งล่าสุด</div>
     </div>
     <div class="card">
+      <h2>ตลาดโลก & ข่าว</h2>
+      <table id="macroTbl"><tr><td class="m">กำลังโหลด...</td></tr></table>
+      <div class="note" id="macroNote"></div>
+      <div class="two" style="margin-top:12px">
+        <div><h2>ปฏิทินเศรษฐกิจ USD (ผลกระทบสูง)</h2><div class="log" id="calList" style="max-height:240px"><span class="m">กำลังโหลด...</span></div></div>
+        <div><h2>ข่าวคริปโตล่าสุด <span id="newsScore"></span></h2><div class="log" id="newsList" style="max-height:240px"><span class="m">กำลังโหลด...</span></div></div>
+      </div>
+      <div class="note">ปฏิทินและข่าวใช้ประกอบการตัดสินใจเท่านั้น ไม่ได้ใช้คำนวณสัญญาณ (ไม่มีข้อมูลย้อนหลังให้พิสูจน์) · คะแนนข่าวคิดจากคำในหัวข่าวแบบง่าย</div>
+    </div>
+    <div class="card">
       <h2>Whale Tracker: วาฬกำลังซื้อ/ขายเหรียญไหน (ไม้ใหญ่ Spot แบบ real-time)</h2>
       <div class="scroll"><table id="whaleTbl"><tr><td class="m">กำลังเชื่อมต่อ...</td></tr></table></div>
       <div class="note" id="whaleNote"></div>
@@ -69,6 +80,9 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
     <div class="card">
       <h2>Backtest (จำลองย้อนหลัง หักค่าธรรมเนียม + slippage + funding แล้ว)</h2>
       <div class="stats" id="btStats"></div>
+      <div class="note r" id="btWarn"></div>
+      <div class="row"><button id="wfBtn">ทดสอบ Walk-forward (หา SL/TP บน 60% แรก → ทดสอบ 40% หลัง)</button></div>
+      <div id="wfOut"></div>
       <div class="two">
         <div><h2>เทียบทุกกลยุทธ์ (คลิกเพื่อเลือกใช้)</h2><table id="cmp"></table></div>
         <div><h2>กราฟเงินทุน</h2><div id="eqchart"></div></div>
@@ -114,6 +128,7 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
     <div class="card">
       <details open><summary>ตั้งค่า</summary>
         <label>กลยุทธ์ <select id="p_strategy"></select></label>
+        <div id="filterBox"></div>
         <label>Confluence: คะแนนขั้นต่ำ <input type="number" id="p_conf" value="60"></label>
         <label>ADX ขั้นต่ำ (มีเทรนด์) <input type="number" id="p_adxMin" value="20"></label>
         <label>EMA เร็ว <input type="number" id="p_fast" value="20"></label>
@@ -121,8 +136,8 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
         <label>EMA เทรนด์ <input type="number" id="p_trend" value="200"></label>
         <label>RSI <input type="number" id="p_rsi" value="14"></label>
         <label>ATR <input type="number" id="p_atr" value="14"></label>
-        <label>SL = ATR × <input type="number" step="0.1" id="p_slAtr" value="1.5"></label>
-        <label>TP = SL × (R) <input type="number" step="0.1" id="p_tpR" value="2"></label>
+        <label>SL = ATR × <input type="number" step="0.1" id="p_slAtr" value="3"></label>
+        <label>TP = SL × (R) <input type="number" step="0.1" id="p_tpR" value="3"></label>
         <label>SL ห่างขั้นต่ำ (% ของราคา) <input type="number" step="0.05" id="p_minSl" value="0.2"></label>
         <label>TP ต้อง ≥ ต้นทุนไป-กลับ × <input type="number" step="0.5" id="p_minEdge" value="3"></label>
         <label>เสี่ยงต่อไม้ (%) <input type="number" step="0.1" id="p_risk" value="1"></label>
@@ -168,21 +183,32 @@ let P, cs = [], ind = null, sym = '', tf = '', ws = null, paper = null, paperOn 
 
 // ---- Settings (persisted) ----
 const NUMS = ['conf', 'adxMin', 'fast', 'slow', 'trend', 'rsi', 'atr', 'slAtr', 'tpR', 'risk', 'lev', 'fee', 'slip', 'funding', 'bal', 'whaleBig', 'whaleSmall', 'whaleAlert', 'whaleN', 'minSl', 'minEdge'];
-const BOOLS = ['p_shorts', 'p_exitOpp', 'a_sound', 'a_notify', 'a_forming'];
+const FKEYS = Object.keys(Core.FILTERS);
+const BOOLS = ['p_shorts', 'p_exitOpp', 'a_sound', 'a_notify', 'a_forming'].concat(FKEYS);
+const SETTINGS_V = 3; // bump to reset strategy defaults after analysis changes
+$('filterBox').innerHTML = '<div class="m" style="margin:6px 0 2px">ตัวกรองสัญญาณ (ผ่านการทดสอบด้วยข้อมูลจริง)</div>' + FKEYS.map(k => `<label>${Core.FILTERS[k].name} <input type="checkbox" id="${k}" ${k === 'fDxy' ? 'checked' : ''} style="width:auto"></label>`).join('');
 $('p_strategy').innerHTML = Object.entries(Core.STRATS).map(([k, s]) => `<option value="${k}">${s.name}</option>`).join('');
+$('p_strategy').value = 'breakout';
 $('style').innerHTML = '<option value="">สไตล์: กำหนดเอง</option>' + Object.entries(Core.STYLES).map(([k, s]) => `<option value="${k}">${s.name} · ${s.tf}</option>`).join('');
 function readParams() {
   const p = { strategy: $('p_strategy').value, shorts: $('p_shorts').checked, exitOpp: $('p_exitOpp').checked };
+  FKEYS.forEach(k => p[k] = $(k).checked);
   NUMS.forEach(k => p[k] = parseFloat($('p_' + k).value) || 0);
   return p;
 }
 function saveSettings() {
-  const s = { sym: $('sym').value, tf: $('tf').value, bars: $('bars').value, style: $('style').value, strategy: $('p_strategy').value, n: {}, b: {} };
+  const s = { sym: $('sym').value, tf: $('tf').value, bars: $('bars').value, style: $('style').value, strategy: $('p_strategy').value, n: {}, b: {}, v: SETTINGS_V };
   NUMS.forEach(k => s.n[k] = $('p_' + k).value); BOOLS.forEach(k => s.b[k] = $(k).checked);
   store.set('settings', s);
 }
 (function loadSettings() {
   const s = store.get('settings'); if (!s) return;
+  if (s.v !== SETTINGS_V) { // older version: keep coin, alerts and whale settings; use new tested defaults for the rest
+    if (s.sym) $('sym').value = s.sym;
+    ['whaleBig', 'whaleSmall', 'whaleAlert', 'whaleN', 'fee', 'slip', 'bal', 'risk'].forEach(k => { if (s.n?.[k] != null) $('p_' + k).value = s.n[k]; });
+    ['a_sound', 'a_notify', 'a_forming'].forEach(k => { if (s.b?.[k] != null) $(k).checked = s.b[k]; });
+    return;
+  }
   ['sym', 'tf', 'bars', 'style'].forEach(k => { if (s[k] != null) $(k).value = s[k]; });
   if (s.strategy) $('p_strategy').value = s.strategy;
   NUMS.forEach(k => { if (s.n?.[k] != null) $('p_' + k).value = s.n[k]; });
@@ -235,6 +261,7 @@ async function load() {
   catch (e) { status('โหลดไม่สำเร็จ: ' + e.message); return; }
   if (cs.length < P.trend + 2) { status('ข้อมูลน้อยเกินไปสำหรับ EMA เทรนด์'); return; }
   candle.setData(cs.map(toBar)); vol.setData(cs.map(toVol));
+  await loadBtcRef();
   recompute(true);
   loadPaper();
   lastMsg = Date.now();
@@ -242,12 +269,13 @@ async function load() {
   connectWS();
   scanMTF();
   startWhale(); updateFutures(); updateWalls(); wDirty = true;
+  renderNews(); renderMarket();
   status(`${sym} ${tf} · ${cs.length} แท่ง · live`);
 }
 const lastClosed = () => cs.length - 2;
 
 function recompute(full) {
-  ind = Core.indicators(cs, P);
+  ind = Core.indicators(cs, P); ind.ext = buildExt(cs, tf);
   sFast.setData(toLine(ind.fast)); sSlow.setData(toLine(ind.slow)); sTrend.setData(toLine(ind.trend)); sST.setData(toLine(ind.st.line));
   if (full) runBacktest();
   renderSignal();
@@ -258,7 +286,8 @@ function runBacktest() {
   const st = Core.backtest(cs, ind, P, lastClosed()), s = Core.stats(st);
   $('btStats').innerHTML = [
     ['จำนวนเทรด', s.n], ['Win rate', fmt(s.win, 1) + '%'], ['กำไรสุทธิ', `<span class="${s.net >= 0 ? 'g' : 'r'}">${fmt(s.net, 2)}%</span>`],
-    ['Profit factor', fmt(s.pf, 2)], ['Max drawdown', fmt(s.dd, 2) + '%'], ['เฉลี่ย R/ไม้', fmt(s.avgR, 2)]
+    ['Win% ที่ต้องได้ (คุ้มทุน)', s.beWin == null ? '–' : fmt(s.beWin, 1) + '%'],
+    ['เฉลี่ย R/ไม้', `<span class="${s.avgR >= 0 ? 'g' : 'r'}">${fmt(s.avgR, 2)}</span>`], ['Profit factor', fmt(s.pf, 2)], ['Max drawdown', fmt(s.dd, 2) + '%']
   ].map(([k, v]) => `<div><small>${k}</small><b class="num">${v}</b></div>`).join('');
   eqLine.setData(st.curve.map(c => ({ time: c.time + TZ, value: c.value })));
   eqChart.timeScale().fitContent();
@@ -270,6 +299,8 @@ function runBacktest() {
   }
   if (st.pos) mk.push({ time: st.pos.time + TZ, position: st.pos.dir === 1 ? 'belowBar' : 'aboveBar', color: '#f0b90b', shape: st.pos.dir === 1 ? 'arrowUp' : 'arrowDown', text: 'เปิดอยู่' });
   candle.setMarkers(mk.sort((a, b) => a.time - b.time));
+  $('btWarn').textContent = ['1m', '5m', '15m', '30m'].includes(tf) ? 'คำเตือน: จากการทดสอบด้วยข้อมูลจริง 5 เหรียญ timeframe เล็กขาดทุนทุกกลยุทธ์ เพราะต้นทุนสูงกว่าการเคลื่อนไหวที่สัญญาณจับได้ แนะนำ 4h'
+    : tf === '1h' ? 'หมายเหตุ: 1h ขาดทุนถ้าไม่ใช้ตัวกรอง ควรเปิดตัวกรองดอลลาร์/ทองคำ' : '';
   const cmp = Core.compareAll(cs, ind, P, lastClosed()).sort((a, b) => b.net - a.net);
   $('cmp').innerHTML = '<tr><th>กลยุทธ์</th><th>เทรด</th><th>Win%</th><th>กำไร%</th><th>DD%</th></tr>' + cmp.map(c =>
     `<tr class="click ${c.key === P.strategy ? 'sel' : ''}" data-k="${c.key}"><td>${c.name}</td><td class="num">${c.n}</td><td class="num">${fmt(c.win, 0)}</td><td class="num ${c.net >= 0 ? 'g' : 'r'}">${fmt(c.net, 1)}</td><td class="num">${fmt(c.dd, 1)}</td></tr>`).join('');
@@ -367,11 +398,13 @@ function applyBar(bar) {
 }
 function liveAnalyze() {
   if (cs.length < 3) return;
-  ind = Core.indicators(cs, P);
+  ind = Core.indicators(cs, P); ind.ext = buildExt(cs, tf);
   const i = cs.length - 1, c = cs[i], t = c.time + TZ;
   [[sFast, ind.fast], [sSlow, ind.slow], [sTrend, ind.trend], [sST, ind.st.line]].forEach(([s, a]) => a[i] != null && s.update({ time: t, value: a[i] }));
   // 16 indicator votes + 2 live-only whale votes (whale data has no history, so backtest uses the 16 only)
-  const allVotes = Core.votes(cs, ind, i, P).concat([Whale.spotVote(Whale.sum(wbook, sym, Date.now(), 3600e3)), fut?.vote ?? null]);
+  const tv = (x, sign) => x && x.val[i] != null && x.sma[i] != null ? (x.val[i] > x.sma[i] ? sign : -sign) : null;
+  const allVotes = Core.votes(cs, ind, i, P).concat([Whale.spotVote(Whale.sum(wbook, sym, Date.now(), 3600e3)), fut?.vote ?? null,
+    tv(ind.ext?.dxy, -1), tv(ind.ext?.gold, 1), tv(ind.ext?.oil, 1)]);
   const sig = Core.signalAt(cs, ind, i, P), sc = Core.score(allVotes);
   $('liveTitle').innerHTML = sig ? `กำลังเกิด ${dirTxt(sig.dir)}` : `<span class="${scoreCls(sc)}">${sc == null ? '–' : sc >= 30 ? 'แนวโน้มขึ้น' : sc <= -30 ? 'แนวโน้มลง' : 'ไซด์เวย์ / ไม่ชัด'}</span> <span class="m" style="font-size:15px">· ยังไม่มีสัญญาณ</span>`;
   $('scoreTxt').innerHTML = `<span class="${scoreCls(sc)}">${fmt(sc, 0)}</span>`;
@@ -408,6 +441,7 @@ async function scanMTF() {
     try {
       const k = t === tf && cs.length ? cs.slice(-400) : await fetchKlines(s, t, 400);
       const I = Core.indicators(k, P), i = k.length - 2;
+      I.ext = buildExt(k, t);
       let sig = null, at = i;
       for (let j = i; j > i - 3; j--) { sig = Core.signalAt(k, I, j, P); if (sig) { at = j; break; } }
       if (sig && i === at && t !== tf) alertSig('ยืนยัน', sig, k[i].time, `${s} ${t}`);
@@ -426,7 +460,7 @@ setInterval(scanMTF, 30000);
 $('mtf').onclick = e => { const tr = e.target.closest('tr[data-tf]'); if (tr && tr.dataset.tf !== tf) { $('tf').value = tr.dataset.tf; $('style').value = ''; load(); } };
 
 // ---- Whale tracker ----
-const VOTE_NAMES = Core.VOTE_NAMES.concat(['วาฬ Spot (1ชม.)', 'รายใหญ่ Futures']);
+const VOTE_NAMES = Core.VOTE_NAMES.concat(['วาฬ Spot (1ชม.)', 'รายใหญ่ Futures', 'ดอลลาร์ DXY', 'ทองคำ', 'น้ำมัน']);
 const FAPI = 'https://fapi.binance.com';
 let wbook = store.get('whaleBook') || Whale.newBook(), wSyms = [], wws = null, wFeed = [], wPrice = {}, wDirty = true, fut = null, wallLines = [];
 const wMin = s => /^(BTC|ETH)USDT$/.test(s) ? P.whaleBig : P.whaleSmall;
@@ -490,9 +524,10 @@ async function updateFutures() {
       .map(e => getJSON(`/futures/data/${e}${q}`, [FAPI])));
     if (s !== sym) return;
     fut = Whale.futuresSummary({ top, global, oi, taker });
+    try { const pi = await getJSON(`/fapi/v1/premiumIndex?symbol=${s}`, [FAPI]); fut.fundRate = +pi.lastFundingRate * 100; } catch {}
     const pct = v => fmt(v, 1) + '%', chg = v => v == null ? '' : ` <span class="${v > 0 ? 'g' : v < 0 ? 'r' : 'm'}">(${v > 0 ? '+' : ''}${fmt(v, 2)})</span>`;
     $('futKv').innerHTML = [['รายใหญ่ถือ Long', fut.topLong == null ? '–' : pct(fut.topLong) + chg(fut.topLongChg)], ['รายย่อยถือ Long', fut.retailLong == null ? '–' : pct(fut.retailLong) + chg(fut.retailChg)],
-      ['Open Interest', Whale.usd(fut.oiUsd) + (fut.oiChg == null ? '' : chg(fut.oiChg) + '%')], ['แรงซื้อ/ขาย Market', fmt(fut.takerRatio, 2)]]
+      ['Open Interest', Whale.usd(fut.oiUsd) + (fut.oiChg == null ? '' : chg(fut.oiChg) + '%')], ['แรงซื้อ/ขาย Market', fmt(fut.takerRatio, 2)], ['Funding rate ล่าสุด', fut.fundRate == null ? '–' : `<span class="${fut.fundRate > 0.03 ? 'r' : fut.fundRate < -0.01 ? 'g' : 'm'}">${fmt(fut.fundRate, 4)}%</span>`]]
       .map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
     $('futNotes').innerHTML = fut.notes.map(([c, t]) => `<div class="${c}">• ${t}</div>`).join('') || '<span class="m">ยังไม่มีความเปลี่ยนแปลงชัดเจน</span>';
   } catch (e) {
@@ -517,6 +552,129 @@ async function updateWalls() {
   } catch (e) { if (s === sym) $('wallKv').innerHTML = `<span class="m">โหลดไม่ได้: ${e.message}</span><span></span>`; }
 }
 setInterval(updateWalls, 30000);
+
+// ---- External data: macro (Yahoo), Fear & Greed, BTC trend → filters ----
+const MACRO = [['dxy', 'DX-Y.NYB', 'ดอลลาร์ (DXY)', -1], ['gold', 'GC=F', 'ทองคำ', 1], ['oil', 'CL=F', 'น้ำมันดิบ', 1], ['spx', '^GSPC', 'S&P 500', 0], ['vix', '^VIX', 'VIX (ความกลัวหุ้น)', 0]];
+const macro = {}; let fngMap = {}, btcPts = null, btcPtsKey = '';
+function buildExt(k, t) {
+  const ext = {};
+  for (const [key] of MACRO) ext[key] = macro[key] ? Core.alignDailyTrend(k, macro[key].map) : null;
+  ext.fng = Object.keys(fngMap).length ? Core.alignDaily(k, fngMap) : null;
+  ext.btcUp = sym !== 'BTCUSDT' && btcPts && btcPtsKey === t ? Core.alignSeries(k, btcPts) : null;
+  return ext;
+}
+async function loadBtcRef() {
+  if (sym === 'BTCUSDT') { btcPts = null; return; }
+  try {
+    const b = await fetchKlines('BTCUSDT', tf, 1000), e = Core.ema(b.map(x => x.close), 200);
+    btcPts = b.map((x, i) => [x.time, e[i] == null ? null : x.close > e[i]]); btcPtsKey = tf;
+  } catch { btcPts = null; }
+}
+async function loadMacro() {
+  await Promise.all(MACRO.map(async ([key, ysym]) => {
+    try {
+      const j = await getJSON(`/v8/finance/chart/${encodeURIComponent(ysym)}?range=5y&interval=1d`, ['https://query1.finance.yahoo.com']);
+      const r = j.chart.result[0], map = {};
+      r.timestamp.forEach((t, i) => { const c = r.indicators.quote[0].close[i]; if (c != null) map[new Date(t * 1000).toISOString().slice(0, 10)] = c; });
+      macro[key] = { map, live: r.meta?.regularMarketPrice };
+    } catch (e) { console.warn('macro', key, e.message); }
+  }));
+  try {
+    const j = await getJSON('/fng/?limit=0&format=json', ['https://api.alternative.me']);
+    fngMap = {}; j.data.forEach(x => fngMap[new Date(+x.timestamp * 1000).toISOString().slice(0, 10)] = +x.value);
+  } catch (e) { console.warn('fng', e.message); }
+  renderMarket();
+  if (cs.length) { recompute(true); liveAnalyze(); scanMTF(); }
+}
+function renderMarket() {
+  const rows = MACRO.map(([key, , name, sign]) => {
+    const m = macro[key];
+    if (!m) return `<tr><td>${name}</td><td colspan="4" class="m">โหลดไม่ได้</td></tr>`;
+    const days = Object.keys(m.map).sort(), vals = days.map(d => m.map[d]), sma = Core.sma(vals, 50), n = vals.length - 1;
+    const last = m.live ?? vals[n], chg = (last / vals[n - 1] - 1) * 100, up = vals[n] > sma[n];
+    const eff = sign === 0 ? '<span class="m">ข้อมูลประกอบ</span>' : (up === (sign === 1)) ? '<span class="g">หนุนคริปโต (ให้ Long)</span>' : '<span class="r">กดดันคริปโต (ให้ Short)</span>';
+    return `<tr><td>${name}</td><td class="num">${fmt(last)}</td><td class="num ${chg >= 0 ? 'g' : 'r'}">${chg >= 0 ? '+' : ''}${fmt(chg, 2)}%</td><td>${up ? '<span class="g">ขาขึ้น</span>' : '<span class="r">ขาลง</span>'}</td><td>${eff}</td></tr>`;
+  });
+  const fd = Object.keys(fngMap).sort(), fv = fngMap[fd[fd.length - 1]];
+  const fLabel = fv == null ? '–' : fv >= 75 ? 'โลภสุดขีด' : fv >= 55 ? 'โลภ' : fv > 45 ? 'กลางๆ' : fv > 25 ? 'กลัว' : 'กลัวสุดขีด';
+  rows.push(`<tr><td>Fear & Greed คริปโต</td><td class="num">${fv ?? '–'}</td><td class="num m">${fd.length > 1 ? (fv - fngMap[fd[fd.length - 2]] >= 0 ? '+' : '') + (fv - fngMap[fd[fd.length - 2]]) : ''}</td><td>${fLabel}</td><td>${fv >= 75 ? '<span class="r">ระวัง Long</span>' : fv <= 25 ? '<span class="g">ระวัง Short</span>' : '<span class="m">ปกติ</span>'}</td></tr>`);
+  $('macroTbl').innerHTML = '<tr><th>ตลาด</th><th>ราคา</th><th>1 วัน</th><th>เทรนด์ (SMA50 วัน)</th><th>ผลต่อคริปโต</th></tr>' + rows.join('');
+  const on = FKEYS.filter(k => P?.[k]).map(k => Core.FILTERS[k].name.split(':')[0]);
+  $('macroNote').textContent = `ตัวกรองที่เปิดอยู่: ${on.length ? on.join(', ') : 'ไม่มี'} · ใช้ราคาปิดของวันก่อนหน้า (ไม่มองอนาคต) · จากการทดสอบ: ดอลลาร์อ่อน/ทองขึ้น/น้ำมันขึ้น มักหนุนคริปโต`;
+}
+setInterval(loadMacro, 30 * 60000);
+
+// ---- Economic calendar (ForexFactory weekly feed) ----
+let calendar = [];
+const calAlerted = new Set();
+async function loadCalendar() {
+  try {
+    const j = await getJSON('/ff_calendar_thisweek.json', ['https://nfs.faireconomy.media']);
+    calendar = j.filter(e => e.country === 'USD' && e.impact === 'High').map(e => ({ ...e, t: new Date(e.date).getTime() })).sort((a, b) => a.t - b.t);
+  } catch (e) { $('calList').innerHTML = `<span class="m">โหลดไม่ได้: ${e.message}</span>`; }
+  renderCalendar();
+}
+function renderCalendar() {
+  const now = Date.now(), up = calendar.filter(e => e.t > now - 3600e3);
+  if (calendar.length) $('calList').innerHTML = up.length ? up.map(e => {
+    const mins = Math.round((e.t - now) / 60000), soon = mins >= -30 && mins <= 120;
+    return `<div class="${soon ? 'r' : ''}"><span class="num m">${new Date(e.t).toLocaleString('th-TH', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span> ${e.title}${e.forecast ? ` <span class="m">คาด ${e.forecast} · ก่อน ${e.previous || '–'}</span>` : ''}${soon ? (mins >= 0 ? ` · อีก ${mins} นาที` : ' · เพิ่งประกาศ') : ''}</div>`;
+  }).join('') : '<span class="m">สัปดาห์นี้ไม่มีข่าวแรงเหลือแล้ว</span>';
+  const next = up.find(e => e.t - now <= 120 * 60000 && e.t - now >= -30 * 60000);
+  $('evTop').textContent = next ? `ข่าวแรง: ${next.title} ${next.t > now ? 'อีก ' + Math.round((next.t - now) / 60000) + ' นาที' : 'เพิ่งประกาศ'} · ราคาอาจผันผวนแรง` : '';
+  const soon = up.find(e => e.t - now <= 60 * 60000 && e.t > now);
+  if (soon && !calAlerted.has(soon.title + soon.t)) { calAlerted.add(soon.title + soon.t); notify(`ปฏิทิน: ${soon.title} (USD) จะประกาศใน ${Math.round((soon.t - now) / 60000)} นาที`, 0); }
+}
+setInterval(loadCalendar, 30 * 60000);
+setInterval(renderCalendar, 60000);
+
+// ---- News (RSS) with simple headline sentiment ----
+const NEWS = ['https://www.coindesk.com/arc/outboundfeeds/rss/', 'https://cointelegraph.com/rss'];
+const POS = /\b(surge|surges|soar|soars|rally|rallies|gain|gains|jump|jumps|bull|bullish|record|all-time high|ath|approve|approves|approval|approved|inflow|inflows|adopt|adoption|rebound|breakout|upgrade|rise|rises|climb|climbs|buy|buys|accumulat\w*)\b/i;
+const NEG = /\b(crash|crashes|plunge|plunges|drop|drops|fall|falls|bear|bearish|hack|hacked|exploit|ban|bans|lawsuit|sue|sues|outflow|outflows|sell-off|selloff|liquidat\w*|fraud|scam|decline|declines|slump|slumps|fear|warn|warns|probe|investigation|delist\w*|collapse|bankrupt\w*|tumble|tumbles|dump|dumps)\b/i;
+const COIN_RE = { BTC: /bitcoin|\bbtc\b/i, ETH: /ethereum|\beth\b|\bether\b/i, SOL: /solana|\bsol\b/i, XRP: /\bxrp\b|ripple/i, BNB: /\bbnb\b|binance/i, DOGE: /dogecoin|\bdoge\b/i, ADA: /cardano|\bada\b/i };
+let news = [];
+const esc = t => t.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+async function loadNews() {
+  const all = [];
+  await Promise.all(NEWS.map(async url => {
+    try {
+      const r = await fetch(url); if (!r.ok) throw new Error('HTTP ' + r.status);
+      const doc = new DOMParser().parseFromString(await r.text(), 'text/xml'), src = new URL(url).hostname.replace('www.', '');
+      doc.querySelectorAll('item').forEach(it => {
+        const title = it.querySelector('title')?.textContent?.trim() || '', link = it.querySelector('link')?.textContent?.trim() || '';
+        const t = Date.parse(it.querySelector('pubDate')?.textContent || '') || 0;
+        if (title) all.push({ title, link, t, src, s: (POS.test(title) ? 1 : 0) - (NEG.test(title) ? 1 : 0) });
+      });
+    } catch (e) { console.warn('news', url, e.message); }
+  }));
+  if (all.length) news = all.sort((a, b) => b.t - a.t).slice(0, 40);
+  renderNews();
+}
+function renderNews() {
+  if (!news.length) { $('newsList').innerHTML = '<span class="m">โหลดข่าวไม่ได้</span>'; return; }
+  const coin = sym.replace('USDT', ''), re = COIN_RE[coin] || new RegExp('\\b' + coin + '\\b', 'i');
+  const day = news.filter(n => Date.now() - n.t < 864e5), sc = day.reduce((a, n) => a + n.s, 0);
+  $('newsScore').innerHTML = `<span class="${sc > 0 ? 'g' : sc < 0 ? 'r' : 'm'}">(อารมณ์ข่าว 24 ชม.: ${sc > 0 ? '+' : ''}${sc})</span>`;
+  $('newsList').innerHTML = news.map(n => `<div${re.test(n.title) ? ' style="background:#1f2630"' : ''}><span class="num m">${n.t ? new Date(n.t).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : ''}</span> ${n.s > 0 ? '<span class="g">▲</span>' : n.s < 0 ? '<span class="r">▼</span>' : '<span class="m">●</span>'} <a href="${esc(n.link)}" target="_blank" style="color:var(--ink)">${esc(n.title)}</a> <span class="m">${n.src}</span></div>`).join('');
+}
+setInterval(loadNews, 10 * 60000);
+
+// ---- Walk-forward ----
+$('wfBtn').onclick = () => {
+  if (!cs.length) return;
+  const w = Core.walkForward(cs, ind, P, lastClosed());
+  if (!w.best) { $('wfOut').innerHTML = '<div class="note">เทรดน้อยเกินไปสำหรับการทดสอบ ลองเพิ่มจำนวนแท่ง</div>'; return; }
+  const r = x => `<span class="${x.avgR >= 0 ? 'g' : 'r'}">${fmt(x.avgR, 2)}R</span>`;
+  const verdict = w.test.avgR > 0 && w.test.n >= 20 ? '<span class="g">ผ่าน: ยังทำกำไรได้บนข้อมูลที่ไม่เคยเห็น</span>' : w.test.n < 20 ? '<span class="m">เทรดน้อยเกินจะสรุป</span>' : '<span class="r">ไม่ผ่าน: ค่าที่ดีในอดีตใช้ไม่ได้กับช่วงหลัง</span>';
+  $('wfOut').innerHTML = `<div class="kv"><span>ค่าที่ดีที่สุดช่วงแรก</span><span class="num">SL ${w.best.sl}×ATR · TP ${w.best.tp}R</span>
+    <span>ช่วงแรก (หาค่า)</span><span class="num">${r(w.best.train)} · ${w.best.train.n} เทรด · win ${fmt(w.best.train.win, 0)}%</span>
+    <span>ช่วงหลัง (ทดสอบจริง)</span><span class="num">${r(w.test)} · ${w.test.n} เทรด · win ${fmt(w.test.win, 0)}%</span>
+    <span>ค่าปัจจุบันในช่วงหลัง</span><span class="num">${r(w.cur)} · ${w.cur.n} เทรด</span>
+    <span>สรุป</span><span>${verdict}</span></div>
+    <div class="row"><button id="wfApply">ใช้ SL ${w.best.sl} / TP ${w.best.tp}</button></div>`;
+  $('wfApply').onclick = () => { $('p_slAtr').value = w.best.sl; $('p_tpR').value = w.best.tp; $('style').value = ''; applyParams(); };
+};
 
 // ---- Paper trading ----
 const pKey = () => `paper:${sym}:${tf}`;
@@ -554,7 +712,7 @@ $('ptStop').onclick = () => { paperOn = false; savePaper(); renderPaper(); };
 $('ptReset').onclick = () => { if (!cs.length) return; paper = Core.newState(P.bal); paperOn = false; savePaper(); renderPaper(); renderSignal(); };
 
 // ---- Controls ----
-function applyParams() { P = readParams(); saveSettings(); if (cs.length) { recompute(true); liveAnalyze(); scanMTF(); } }
+function applyParams() { P = readParams(); saveSettings(); renderMarket(); if (cs.length) { recompute(true); liveAnalyze(); scanMTF(); } }
 $('style').onchange = () => {
   const s = Core.STYLES[$('style').value]; if (!s) return;
   $('tf').value = s.tf; $('p_slAtr').value = s.slAtr; $('p_tpR').value = s.tpR;
@@ -564,7 +722,9 @@ $('tf').onchange = () => { $('style').value = ''; };
 $('load').onclick = load;
 $('apply').onclick = applyParams;
 $('sym').onkeydown = e => { if (e.key === 'Enter') load(); };
-BOOLS.slice(2).forEach(k => $(k).onchange = saveSettings);
+loadMacro(); loadCalendar(); loadNews();
+['a_sound', 'a_notify', 'a_forming'].forEach(k => $(k).onchange = saveSettings);
+FKEYS.forEach(k => $(k).onchange = applyParams);
 load();
 }
 </script>
