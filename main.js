@@ -4,7 +4,7 @@ const { autoUpdater } = require('electron-updater');
 // Hosts the local page reads directly (public market data, news RSS, economic calendar)
 const BINANCE = ['https://api.binance.com/*', 'https://data-api.binance.vision/*', 'https://fapi.binance.com/*',
   'https://query1.finance.yahoo.com/*', 'https://api.alternative.me/*', 'https://nfs.faireconomy.media/*',
-  'https://www.coindesk.com/*', 'https://cointelegraph.com/*', 'https://api.telegram.org/*'];
+  'https://www.coindesk.com/*', 'https://cointelegraph.com/*', 'https://api.telegram.org/*', 'https://raw.githubusercontent.com/*'];
 let win;
 
 function setupUpdater() {

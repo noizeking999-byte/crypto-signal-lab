@@ -331,7 +331,7 @@ const Core = (() => {
         if (st.pos && o && o.dir !== st.pos.dir && q.exitOpp) closePos(st, cs[k].time, cs[k].close, 'กลับตัว', q);
       }
       const t = st.trades[0];
-      return { at: j, ago: i - j, sig, status: st.pos ? 'open' : t.reason, exit: t?.exit, r: t ? t.r : unreal(st, cs[i].close, cs[i].time, q) / st.pos.riskAmt };
+      return { at: j, ago: i - j, sig, status: st.pos ? 'open' : t.reason, exit: t?.exit, curSl: st.pos?.sl, r: t ? t.r : unreal(st, cs[i].close, cs[i].time, q) / st.pos.riskAmt };
     }
     return null;
   }
