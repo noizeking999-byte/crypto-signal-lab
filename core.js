@@ -311,6 +311,53 @@ const Core = (() => {
     const d = (STRATS[p.strategy] || STRATS.confluence).fn(cs, ind, i, p);
     return d && passFilters(d, cs, ind, i, p) ? levels(d, cs[i].close, ind.atr[i], p) : null;
   }
+  const blockedBy = (d, cs, I, i, p) => Object.keys(FILTERS).filter(k => p[k] && !FILTERS[k].fn(d, cs, I, i)).map(k => FILTERS[k].name.split(':')[0]);
+  // Most recent signal (any age, up to maxBack bars) and what happened after it
+  function lastSignal(cs, ind, p, i, maxBack = 3000) {
+    for (let j = i; j > Math.max(0, i - maxBack); j--) {
+      const sig = signalAt(cs, ind, j, p);
+      if (!sig) continue;
+      const st = newState(1e6), q = { ...p, limit: false };
+      if (!openPos(st, sig, cs[j].time, q, 'x')) return { at: j, ago: i - j, sig, status: 'open' };
+      for (let k = j + 1; k <= i && st.pos; k++) {
+        stepExits(st, cs, ind, k, q);
+        const o = signalAt(cs, ind, k, q);
+        if (st.pos && o && o.dir !== st.pos.dir && q.exitOpp) closePos(st, cs[k].time, cs[k].close, 'กลับตัว', q);
+      }
+      const t = st.trades[0];
+      return { at: j, ago: i - j, sig, status: st.pos ? 'open' : t.reason, exit: t?.exit, r: t ? t.r : unreal(st, cs[i].close, cs[i].time, q) / st.pos.riskAmt };
+    }
+    return null;
+  }
+  // What would trigger the next entry on each side (trigger price when the strategy has one)
+  function plan(cs, ind, p, i) {
+    const c = cs[i].close, a = ind.atr[i], hhv = (n, k) => { let m = -Infinity; for (let j = k - n + 1; j <= k; j++) m = Math.max(m, cs[j].high); return m; };
+    const llv = (n, k) => { let m = Infinity; for (let j = k - n + 1; j <= k; j++) m = Math.min(m, cs[j].low); return m; };
+    const t = ind.trend[i], out = {};
+    for (const d of [1, -1]) {
+      let trig = null, cond = '';
+      switch (p.strategy) {
+        case 'breakout':
+          trig = d === 1 ? hhv(20, i) : llv(20, i);
+          cond = `ปิด${d === 1 ? 'เหนือ' : 'ใต้'}กรอบ 20 แท่ง และ${d === 1 ? 'เหนือ' : 'ใต้'} EMA${p.trend}`;
+          if (t != null && (d === 1 ? trig < t : trig > t)) trig = t; // must also clear the trend EMA
+          break;
+        case 'supertrend':
+          if (ind.st.dir[i] === -d) { trig = ind.st.line[i]; cond = `ปิด${d === 1 ? 'เหนือ' : 'ใต้'}เส้น Supertrend`; } else cond = 'Supertrend อยู่ฝั่งนี้แล้ว รอรอบใหม่';
+          break;
+        case 'meanrev':
+          trig = d === 1 ? ind.bb.lo[i] : ind.bb.up[i];
+          cond = `หลุด${d === 1 ? 'ล่าง' : 'บน'} Bollinger แล้วปิดกลับเข้ามา + RSI ${d === 1 ? '< 40' : '> 60'}`;
+          break;
+        case 'ema': cond = `EMA${p.fast} ตัด${d === 1 ? 'ขึ้น' : 'ลง'} EMA${p.slow} + ราคา${d === 1 ? 'เหนือ' : 'ใต้'} EMA${p.trend} + RSI ${d === 1 ? '> 50' : '< 50'}`; break;
+        case 'macd': cond = `MACD ตัด${d === 1 ? 'ขึ้น' : 'ลง'} Signal + ราคา${d === 1 ? 'เหนือ' : 'ใต้'} EMA${p.trend}`; break;
+        default: cond = `คะแนนรวม${d === 1 ? 'ขึ้นถึง +' : 'ลงถึง -'}${p.conf}`;
+      }
+      const entry = trig ?? c, lv = a != null ? levels(d, entry, a, p) : null, bl = blockedBy(d, cs, ind, i, p);
+      out[d === 1 ? 'long' : 'short'] = { ...lv, trigger: trig, cond, blocked: bl, allowed: !bl.length && (d === 1 || p.shorts) };
+    }
+    return out;
+  }
   // Align daily map {YYYY-MM-DD: close} to bars using the PREVIOUS day (no look-ahead)
   function alignDaily(cs, map) {
     const days = Object.keys(map).sort(), out = new Array(cs.length).fill(null);
@@ -542,7 +589,7 @@ const Core = (() => {
   }
 
   return { sma, ema, rma, rsi, atr, macd, bollinger, stoch, adx, supertrend, ichimoku, psar, cci, willr, mfi, obv, vwap, donchian,
-    VOTE_NAMES, STRATS, STYLES, FILTERS, passFilters, alignDaily, alignDailyTrend, alignSeries, indicators, votes, score, minRiskPct, levels, signalAt, backtestRange, walkForward,
+    VOTE_NAMES, STRATS, STYLES, FILTERS, passFilters, alignDaily, alignDailyTrend, alignSeries, indicators, votes, score, minRiskPct, levels, signalAt, lastSignal, plan, backtestRange, walkForward,
     newState, openPos, closePos, closePart, checkBar, manage, checkPrice, unreal, fillPending, stepExits, stepEntry, step, backtest, stats, compareAll,
     newPortfolio, portfolioStep, portfolioBacktest, byYear };
 })();

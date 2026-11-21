@@ -1,7 +1,7 @@
 {
   "name": "crypto-signal-lab",
   "productName": "Crypto Signal Lab",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Crypto signal analysis, backtest and paper trading",
   "main": "main.js",
   "scripts": {
