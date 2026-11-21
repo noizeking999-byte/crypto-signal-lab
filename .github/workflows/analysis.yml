@@ -13,11 +13,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: node tools/analyze3.js
+      - run: node tools/analyze4.js
       - name: Commit results
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
-          git add tools/results3.md tools/results3.json
+          git add tools/results4.md tools/results4.json
           git commit -m "analysis results [skip ci]"
           git push
