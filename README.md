@@ -4,12 +4,8 @@ Desktop app (Windows): real-time crypto signals (entry / SL / TP), backtest and 
 
 ## Release a new version
 1. Change `version` in `package.json` (e.g. 1.0.1)
-2. Commit, then tag and push:
-   ```
-   git tag v1.0.1
-   git push && git push --tags
-   ```
-3. GitHub Actions builds the installer and publishes the release. Installed apps update automatically (checked at start and every hour).
+2. Commit and push to `main`
+3. GitHub Actions builds the installer and publishes release `v<version>` (tag is created automatically). Installed apps update automatically (checked at start and every hour).
 
 ## Dev
 ```
