@@ -336,59 +336,114 @@ const Core = (() => {
   }
 
   // ---------- Trading engine with costs ----------
-  // p.fee = fee % per side, p.slip = slippage % per side, p.funding = funding % per 8h (futures)
-  function newState(balance) { return { start: balance, equity: balance, pos: null, trades: [], curve: [], lastTime: null }; }
-  function openPos(st, lv, time, p, src) {
-    const entry = lv.entry * (1 + lv.dir * p.slip / 100); // worse fill
+  // p.fee = taker fee % per side, p.slip = slippage % per side (market orders), p.funding = funding % per 8h
+  // p.limit = enter + take profit with limit orders (maker fee p.makerFee, no slippage; entry must be touched next bar)
+  // p.exitMode: 'fixed' | 'be' (SL→entry after +1R) | 'trail' (ATR trailing, no TP) | 'partial' (50% at +1R, then SL→entry)
+  // p.trailAtr = trailing distance in ATR, p.maxBars = time stop in bars (0 = off)
+  function newState(balance) { return { start: balance, equity: balance, pos: null, pending: null, trades: [], curve: [], lastTime: null }; }
+  function openPos(st, lv, time, p, src, maker = false) {
+    const fee = maker ? (p.makerFee ?? p.fee) : p.fee;
+    const entry = maker ? lv.entry : lv.entry * (1 + lv.dir * p.slip / 100); // market = worse fill
     const dist = lv.dir * (entry - lv.sl);
-    if (!(dist > 0) || st.equity <= 0) return;
-    // size so that hitting SL (incl. fees + exit slippage) loses ~risk%
-    const costPerUnit = (entry + lv.sl) * p.fee / 100 + lv.sl * p.slip / 100;
+    if (!(dist > 0) || st.equity <= 0) return false;
+    // size so that hitting SL (entry fee + taker exit fee + exit slippage) loses ~risk%
+    const costPerUnit = entry * fee / 100 + lv.sl * p.fee / 100 + lv.sl * p.slip / 100;
     let qty = (st.equity * p.risk / 100) / (dist + costPerUnit);
     qty = Math.min(qty, st.equity * p.lev / entry);
-    st.pos = { dir: lv.dir, entry, sl: lv.sl, tp: lv.tp, qty, time, riskAmt: qty * (dist + costPerUnit), src };
+    const trail = p.exitMode === 'trail';
+    st.pos = { dir: lv.dir, entry, sl: lv.sl, tp: trail ? lv.dir * Infinity : lv.tp, qty, time, riskAmt: qty * (dist + costPerUnit), src,
+      feeIn: fee, oneR: dist, sl0: lv.sl, realized: 0, bars: 0, best: entry, beDone: false, partDone: false };
+    return true;
   }
-  function costs(ps, price, time, p) {
-    const fees = (ps.entry + price) * ps.qty * p.fee / 100;
-    const funding = ps.dir * (p.funding || 0) / 100 * ps.entry * ps.qty * Math.max(0, time - ps.time) / 3600 / 8;
-    return fees + funding;
+  // P/L of closing `q` units at `price` (fees + funding included)
+  function legPnl(ps, q, exit, time, p, exitFee) {
+    const fees = (ps.entry * ps.feeIn + exit * exitFee) * q / 100;
+    const funding = ps.dir * (p.funding || 0) / 100 * ps.entry * q * Math.max(0, time - ps.time) / 3600 / 8;
+    return (exit - ps.entry) * q * ps.dir - fees - funding;
   }
-  function closePos(st, time, price, reason, p) {
-    const ps = st.pos, exit = price * (1 - ps.dir * p.slip / 100);
-    const pnl = (exit - ps.entry) * ps.qty * ps.dir - costs(ps, exit, time, p);
+  const fill = (ps, price, p, maker) => (maker ? price : price * (1 - ps.dir * p.slip / 100));
+  function closePos(st, time, price, reason, p, maker = false) {
+    const ps = st.pos, exit = fill(ps, price, p, maker);
+    const pnl = legPnl(ps, ps.qty, exit, time, p, maker ? (p.makerFee ?? p.fee) : p.fee);
     st.equity += pnl;
-    st.trades.push({ dir: ps.dir, entry: ps.entry, sl: ps.sl, tp: ps.tp, time: ps.time, src: ps.src, exit, exitTime: time, reason, pnl, r: pnl / ps.riskAmt });
+    const total = pnl + ps.realized;
+    st.trades.push({ dir: ps.dir, entry: ps.entry, sl: ps.sl, tp: ps.tp, time: ps.time, src: ps.src, exit, exitTime: time, reason, pnl: total, r: total / ps.riskAmt });
     st.pos = null;
   }
+  function closePart(st, time, price, frac, p, maker) {
+    const ps = st.pos, q = ps.qty * frac, exit = fill(ps, price, p, maker);
+    const pnl = legPnl(ps, q, exit, time, p, maker ? (p.makerFee ?? p.fee) : p.fee);
+    st.equity += pnl; ps.realized += pnl; ps.qty -= q; ps.partDone = true; ps.sl = ps.entry;
+  }
+  const hit = (ps, bar, lvl) => (ps.dir === 1 ? bar.high >= lvl : bar.low <= lvl);
+  const hitStop = (ps, bar) => (ps.dir === 1 ? bar.low <= ps.sl : bar.high >= ps.sl);
+  // SL / partial / TP inside a closed bar. SL is checked first (conservative when both are touched).
   function checkBar(st, bar, p) {
     const ps = st.pos;
     if (!ps || bar.time <= ps.time) return;
-    if (ps.dir === 1 ? bar.low <= ps.sl : bar.high >= ps.sl)
-      return closePos(st, bar.time, ps.dir === 1 ? Math.min(bar.open, ps.sl) : Math.max(bar.open, ps.sl), 'SL', p);
-    if (ps.dir === 1 ? bar.high >= ps.tp : bar.low <= ps.tp)
-      return closePos(st, bar.time, ps.dir === 1 ? Math.max(bar.open, ps.tp) : Math.min(bar.open, ps.tp), 'TP', p);
+    if (hitStop(ps, bar))
+      return closePos(st, bar.time, ps.dir === 1 ? Math.min(bar.open, ps.sl) : Math.max(bar.open, ps.sl), ps.partDone || ps.beDone ? 'SL (ทุน)' : ps.sl !== ps.sl0 && p.exitMode === 'trail' ? 'Trailing' : 'SL', p);
+    if (p.exitMode === 'partial' && !ps.partDone) {
+      const lvl = ps.entry + ps.dir * ps.oneR;
+      if (hit(ps, bar, lvl)) closePart(st, bar.time, ps.dir === 1 ? Math.max(bar.open, lvl) : Math.min(bar.open, lvl), 0.5, p, !!p.limit);
+    }
+    if (hit(ps, bar, ps.tp))
+      return closePos(st, bar.time, ps.dir === 1 ? Math.max(bar.open, ps.tp) : Math.min(bar.open, ps.tp), 'TP', p, !!p.limit);
   }
+  // Stop management at bar close (applies from the next bar → no look-ahead)
+  function manage(st, cs, ind, i, p) {
+    const ps = st.pos, bar = cs[i];
+    if (!ps || bar.time <= ps.time) return;
+    ps.bars++;
+    if (p.exitMode === 'be' && !ps.beDone && hit(ps, bar, ps.entry + ps.dir * ps.oneR)) { ps.beDone = true; ps.sl = ps.dir === 1 ? Math.max(ps.sl, ps.entry) : Math.min(ps.sl, ps.entry); }
+    if (p.exitMode === 'trail' && ind.atr[i] != null) {
+      ps.best = ps.dir === 1 ? Math.max(ps.best, bar.close) : Math.min(ps.best, bar.close);
+      const ns = ps.best - ps.dir * (p.trailAtr || 3) * ind.atr[i];
+      ps.sl = ps.dir === 1 ? Math.max(ps.sl, ns) : Math.min(ps.sl, ns);
+    }
+    if (p.maxBars > 0 && ps.bars >= p.maxBars) closePos(st, bar.time, bar.close, 'หมดเวลา', p);
+  }
+  // Live tick check (paper trading)
   function checkPrice(st, price, time, p) {
     const ps = st.pos;
     if (!ps) return;
-    if (ps.dir === 1 ? price <= ps.sl : price >= ps.sl) return closePos(st, time, price, 'SL', p);
-    if (ps.dir === 1 ? price >= ps.tp : price <= ps.tp) return closePos(st, time, price, 'TP', p);
+    if (ps.dir === 1 ? price <= ps.sl : price >= ps.sl) return closePos(st, time, price, ps.partDone || ps.beDone ? 'SL (ทุน)' : 'SL', p);
+    if (p.exitMode === 'partial' && !ps.partDone && (ps.dir === 1 ? price >= ps.entry + ps.oneR : price <= ps.entry - ps.oneR)) closePart(st, time, price, 0.5, p, !!p.limit);
+    if (ps.dir === 1 ? price >= ps.tp : price <= ps.tp) return closePos(st, time, price, 'TP', p, !!p.limit);
   }
-  // unrealized P/L net of estimated exit costs
+  // unrealized P/L net of estimated exit costs (+ realized partial)
   function unreal(st, price, time, p) {
     const ps = st.pos;
     if (!ps) return 0;
-    const exit = price * (1 - ps.dir * p.slip / 100);
-    return (exit - ps.entry) * ps.qty * ps.dir - costs(ps, exit, time ?? ps.time, p);
+    return legPnl(ps, ps.qty, fill(ps, price, p, false), time ?? ps.time, p, p.fee);
+  }
+  // Pending limit entry: fill if next bar touches the price; if that bar also breaches SL, stop out (conservative)
+  function fillPending(st, bar, p) {
+    const pe = st.pending;
+    if (!pe || bar.time <= pe.time) return;
+    st.pending = null;
+    if (st.pos || !(pe.lv.dir === 1 ? bar.low <= pe.lv.entry : bar.high >= pe.lv.entry)) return;
+    if (!openPos(st, pe.lv, bar.time, p, pe.src, true)) return;
+    if (hitStop(st.pos, bar)) closePos(st, bar.time, st.pos.sl, 'SL', p);
+  }
+  function stepExits(st, cs, ind, i, p) {
+    fillPending(st, cs[i], p);
+    checkBar(st, cs[i], p);
+    manage(st, cs, ind, i, p);
+  }
+  // returns true if a new position/order was placed
+  function stepEntry(st, cs, ind, i, p, sig, src = 'auto') {
+    const bar = cs[i];
+    if (!sig) return false;
+    if (st.pos && sig.dir !== st.pos.dir && p.exitOpp) closePos(st, bar.time, bar.close, 'กลับตัว', p);
+    if (st.pos || st.pending || !(sig.dir === 1 || p.shorts)) return false;
+    if (p.limit) { st.pending = { lv: sig, time: bar.time, src }; return true; }
+    return openPos(st, sig, bar.time, p, src);
   }
   function step(st, cs, ind, i, p, auto = true) {
     const bar = cs[i];
-    checkBar(st, bar, p);
-    const sig = signalAt(cs, ind, i, p);
-    if (auto && sig) {
-      if (st.pos && sig.dir !== st.pos.dir && p.exitOpp) closePos(st, bar.time, bar.close, 'กลับตัว', p);
-      if (!st.pos && (sig.dir === 1 || p.shorts)) openPos(st, sig, bar.time, p, 'auto');
-    }
+    stepExits(st, cs, ind, i, p);
+    if (auto) stepEntry(st, cs, ind, i, p, signalAt(cs, ind, i, p));
     st.curve.push({ time: bar.time, value: st.equity + unreal(st, bar.close, bar.time, p) });
     st.lastTime = bar.time;
   }
@@ -396,6 +451,57 @@ const Core = (() => {
     const st = newState(p.bal);
     for (let i = 1; i <= lastClosed; i++) step(st, cs, ind, i, p);
     return st;
+  }
+
+  // ---------- Portfolio: many coins, shared equity, at most maxPos open positions ----------
+  // sets: [{ sym, cs, ind, last }] ; per-position notional capped at equity × lev / maxPos
+  function newPortfolio(balance, syms) {
+    const pf = { start: balance, equity: balance, trades: [], curve: [], lastTime: null, slots: {} };
+    for (const s of syms) pf.slots[s] = makeSlot(pf, s);
+    return pf;
+  }
+  function makeSlot(pf, sym) {
+    return { sym, pos: null, pending: null, lastClose: null, lastTime: null,
+      get equity() { return pf.equity; }, set equity(v) { pf.equity = v; },
+      trades: { push: t => pf.trades.push({ ...t, sym }) } };
+  }
+  const openCount = pf => Object.values(pf.slots).filter(s => s.pos || s.pending).length;
+  // process all sets for bar time t (each set: index i with cs[i].time === t)
+  function portfolioStep(pf, items, p, maxPos) {
+    const q = { ...p, lev: p.lev / maxPos };
+    for (const { slot, cs, ind, i } of items) { stepExits(slot, cs, ind, i, q); slot.lastClose = cs[i].close; slot.lastTime = cs[i].time; }
+    const sigs = items.map(x => ({ ...x, sig: signalAt(x.cs, x.ind, x.i, q) })).filter(x => x.sig)
+      .sort((a, b) => Math.abs(b.ind.score[b.i] ?? 0) - Math.abs(a.ind.score[a.i] ?? 0));
+    for (const x of sigs) {
+      const s = x.slot;
+      if (s.pos && x.sig.dir !== s.pos.dir && q.exitOpp) closePos(s, x.cs[x.i].time, x.cs[x.i].close, 'กลับตัว', q);
+      if (!s.pos && !s.pending && openCount(pf) < maxPos) stepEntry(s, x.cs, x.ind, x.i, q, x.sig);
+    }
+    const t = items[0].cs[items[0].i].time;
+    let u = 0;
+    for (const s of Object.values(pf.slots)) if (s.pos && s.lastClose != null) u += unreal(s, s.lastClose, s.lastTime, q);
+    pf.curve.push({ time: t, value: pf.equity + u });
+    pf.lastTime = t;
+  }
+  function portfolioBacktest(sets, p, maxPos = 5, fromTime = -Infinity, toTime = Infinity) {
+    const pf = newPortfolio(p.bal, sets.map(s => s.sym)), byTime = new Map();
+    for (const s of sets) {
+      const last = s.last ?? s.cs.length - 2;
+      for (let i = 1; i <= last; i++) {
+        const t = s.cs[i].time;
+        if (t < fromTime || t > toTime) continue;
+        if (!byTime.has(t)) byTime.set(t, []);
+        byTime.get(t).push({ slot: pf.slots[s.sym], cs: s.cs, ind: s.ind, i });
+      }
+    }
+    for (const t of [...byTime.keys()].sort((a, b) => a - b)) portfolioStep(pf, byTime.get(t), p, maxPos);
+    return pf;
+  }
+  // per-year breakdown of trades
+  function byYear(trades) {
+    const y = {};
+    for (const t of trades) { const k = new Date(t.exitTime * 1000).getUTCFullYear(); (y[k] ||= { n: 0, w: 0, r: 0 }); y[k].n++; y[k].r += t.r; if (t.pnl > 0) y[k].w++; }
+    return Object.entries(y).map(([year, v]) => ({ year: +year, n: v.n, win: v.w / v.n * 100, avgR: v.r / v.n }));
   }
   function stats(st) {
     const t = st.trades, wins = t.filter(x => x.pnl > 0);
@@ -406,6 +512,8 @@ const Core = (() => {
       n: t.length, win: t.length ? wins.length / t.length * 100 : 0,
       net: (st.equity - st.start) / st.start * 100, pf: gl > 0 ? gw / gl : (gw > 0 ? Infinity : 0),
       dd: dd * 100, avgR: t.length ? t.reduce((a, x) => a + x.r, 0) / t.length : 0,
+      years: st.curve.length > 1 ? (st.curve[st.curve.length - 1].time - st.curve[0].time) / 31557600 : 0,
+      cagr: (() => { const yrs = st.curve.length > 1 ? (st.curve[st.curve.length - 1].time - st.curve[0].time) / 31557600 : 0; return yrs > 0.1 && st.equity > 0 ? ((st.equity / st.start) ** (1 / yrs) - 1) * 100 : null; })(),
       // win rate needed to break even given the actual average win / loss (in R)
       beWin: (() => { const W = wins.map(x => x.r), L = t.filter(x => x.pnl <= 0).map(x => -x.r);
         if (!W.length || !L.length) return null; const aw = W.reduce((a, x) => a + x, 0) / W.length, al = L.reduce((a, x) => a + x, 0) / L.length; return al / (aw + al) * 100; })()
@@ -435,6 +543,7 @@ const Core = (() => {
 
   return { sma, ema, rma, rsi, atr, macd, bollinger, stoch, adx, supertrend, ichimoku, psar, cci, willr, mfi, obv, vwap, donchian,
     VOTE_NAMES, STRATS, STYLES, FILTERS, passFilters, alignDaily, alignDailyTrend, alignSeries, indicators, votes, score, minRiskPct, levels, signalAt, backtestRange, walkForward,
-    newState, openPos, closePos, checkBar, checkPrice, unreal, step, backtest, stats, compareAll };
+    newState, openPos, closePos, closePart, checkBar, manage, checkPrice, unreal, fillPending, stepExits, stepEntry, step, backtest, stats, compareAll,
+    newPortfolio, portfolioStep, portfolioBacktest, byYear };
 })();
 if (typeof module !== 'undefined') module.exports = Core;
