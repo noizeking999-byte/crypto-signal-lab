@@ -200,6 +200,8 @@ const Core = (() => {
     ind.st = supertrend(h, l, c, atr(h, l, c, 10), 3);
     ind.obv = obv(c, v); ind.obvE = ema(ind.obv, 20);
     ind.htf = ema(c, 800); // ≈ EMA200 of a 4x higher timeframe
+    const ap = ind.atr.map((a, i) => (a == null ? null : a / c[i])), apm = sma(ap, 100);
+    ind.atrRel = ap.map((x, i) => (x != null && apm[i] ? x / apm[i] : null)); // volatility vs its 100-bar average
     ind.score = cs.map((_, i) => score(votes(cs, ind, i, p)));
     return ind;
   }
@@ -308,8 +310,59 @@ const Core = (() => {
   const passFilters = (d, cs, I, i, p) => Object.keys(FILTERS).every(k => !p[k] || FILTERS[k].fn(d, cs, I, i));
   function signalAt(cs, ind, i, p) {
     if (i < 1 || !ok(ind.atr[i])) return null;
-    const d = (STRATS[p.strategy] || STRATS.confluence).fn(cs, ind, i, p);
-    return d && passFilters(d, cs, ind, i, p) ? levels(d, cs[i].close, ind.atr[i], p) : null;
+    let d = (STRATS[p.strategy] || STRATS.confluence).fn(cs, ind, i, p);
+    if (!d && p.strategy2 && STRATS[p.strategy2]) d = STRATS[p.strategy2].fn(cs, ind, i, p); // second strategy (OR)
+    if (!d || !passFilters(d, cs, ind, i, p)) return null;
+    const lv = levels(d, cs[i].close, ind.atr[i], p), r = ind.atrRel?.[i];
+    lv.volMult = p.volAdj && r ? Math.min(1.5, Math.max(0.5, 1 / r)) : 1; // smaller size when volatility is high
+    return lv;
+  }
+  const blockedBy = (d, cs, I, i, p) => Object.keys(FILTERS).filter(k => p[k] && !FILTERS[k].fn(d, cs, I, i)).map(k => FILTERS[k].name.split(':')[0]);
+  // Most recent signal (any age, up to maxBack bars) and what happened after it
+  function lastSignal(cs, ind, p, i, maxBack = 3000) {
+    for (let j = i; j > Math.max(0, i - maxBack); j--) {
+      const sig = signalAt(cs, ind, j, p);
+      if (!sig) continue;
+      const st = newState(1e6), q = { ...p, limit: false };
+      if (!openPos(st, sig, cs[j].time, q, 'x')) return { at: j, ago: i - j, sig, status: 'open' };
+      for (let k = j + 1; k <= i && st.pos; k++) {
+        stepExits(st, cs, ind, k, q);
+        const o = signalAt(cs, ind, k, q);
+        if (st.pos && o && o.dir !== st.pos.dir && q.exitOpp) closePos(st, cs[k].time, cs[k].close, 'กลับตัว', q);
+      }
+      const t = st.trades[0];
+      return { at: j, ago: i - j, sig, status: st.pos ? 'open' : t.reason, exit: t?.exit, r: t ? t.r : unreal(st, cs[i].close, cs[i].time, q) / st.pos.riskAmt };
+    }
+    return null;
+  }
+  // What would trigger the next entry on each side (trigger price when the strategy has one)
+  function plan(cs, ind, p, i) {
+    const c = cs[i].close, a = ind.atr[i], hhv = (n, k) => { let m = -Infinity; for (let j = k - n + 1; j <= k; j++) m = Math.max(m, cs[j].high); return m; };
+    const llv = (n, k) => { let m = Infinity; for (let j = k - n + 1; j <= k; j++) m = Math.min(m, cs[j].low); return m; };
+    const t = ind.trend[i], out = {};
+    for (const d of [1, -1]) {
+      let trig = null, cond = '';
+      switch (p.strategy) {
+        case 'breakout':
+          trig = d === 1 ? hhv(20, i) : llv(20, i);
+          cond = `ปิด${d === 1 ? 'เหนือ' : 'ใต้'}กรอบ 20 แท่ง และ${d === 1 ? 'เหนือ' : 'ใต้'} EMA${p.trend}`;
+          if (t != null && (d === 1 ? trig < t : trig > t)) trig = t; // must also clear the trend EMA
+          break;
+        case 'supertrend':
+          if (ind.st.dir[i] === -d) { trig = ind.st.line[i]; cond = `ปิด${d === 1 ? 'เหนือ' : 'ใต้'}เส้น Supertrend`; } else cond = 'Supertrend อยู่ฝั่งนี้แล้ว รอรอบใหม่';
+          break;
+        case 'meanrev':
+          trig = d === 1 ? ind.bb.lo[i] : ind.bb.up[i];
+          cond = `หลุด${d === 1 ? 'ล่าง' : 'บน'} Bollinger แล้วปิดกลับเข้ามา + RSI ${d === 1 ? '< 40' : '> 60'}`;
+          break;
+        case 'ema': cond = `EMA${p.fast} ตัด${d === 1 ? 'ขึ้น' : 'ลง'} EMA${p.slow} + ราคา${d === 1 ? 'เหนือ' : 'ใต้'} EMA${p.trend} + RSI ${d === 1 ? '> 50' : '< 50'}`; break;
+        case 'macd': cond = `MACD ตัด${d === 1 ? 'ขึ้น' : 'ลง'} Signal + ราคา${d === 1 ? 'เหนือ' : 'ใต้'} EMA${p.trend}`; break;
+        default: cond = `คะแนนรวม${d === 1 ? 'ขึ้นถึง +' : 'ลงถึง -'}${p.conf}`;
+      }
+      const entry = trig ?? c, lv = a != null ? levels(d, entry, a, p) : null, bl = blockedBy(d, cs, ind, i, p);
+      out[d === 1 ? 'long' : 'short'] = { ...lv, trigger: trig, cond, blocked: bl, allowed: !bl.length && (d === 1 || p.shorts) };
+    }
+    return out;
   }
   // Align daily map {YYYY-MM-DD: close} to bars using the PREVIOUS day (no look-ahead)
   function alignDaily(cs, map) {
@@ -348,7 +401,7 @@ const Core = (() => {
     if (!(dist > 0) || st.equity <= 0) return false;
     // size so that hitting SL (entry fee + taker exit fee + exit slippage) loses ~risk%
     const costPerUnit = entry * fee / 100 + lv.sl * p.fee / 100 + lv.sl * p.slip / 100;
-    let qty = (st.equity * p.risk / 100) / (dist + costPerUnit);
+    let qty = (st.equity * p.risk * (lv.volMult || 1) / 100) / (dist + costPerUnit);
     qty = Math.min(qty, st.equity * p.lev / entry);
     const trail = p.exitMode === 'trail';
     st.pos = { dir: lv.dir, entry, sl: lv.sl, tp: trail ? lv.dir * Infinity : lv.tp, qty, time, riskAmt: qty * (dist + costPerUnit), src,
@@ -436,14 +489,20 @@ const Core = (() => {
     const bar = cs[i];
     if (!sig) return false;
     if (st.pos && sig.dir !== st.pos.dir && p.exitOpp) closePos(st, bar.time, bar.close, 'กลับตัว', p);
-    if (st.pos || st.pending || !(sig.dir === 1 || p.shorts)) return false;
+    if (st.pos || st.pending || !(sig.dir === 1 ? p.longs !== false : p.shorts)) return false;
     if (p.limit) { st.pending = { lv: sig, time: bar.time, src }; return true; }
     return openPos(st, sig, bar.time, p, src);
+  }
+  // Daily loss stop: no new entries for the rest of the UTC day once equity fell p.dailyLoss % from the day's start
+  function dayGuard(st, t, p) {
+    const day = Math.floor(t / 86400);
+    if (st.dayKey !== day) { st.dayKey = day; st.dayEq = st.equity; }
+    return !(p.dailyLoss > 0 && st.equity <= st.dayEq * (1 - p.dailyLoss / 100));
   }
   function step(st, cs, ind, i, p, auto = true) {
     const bar = cs[i];
     stepExits(st, cs, ind, i, p);
-    if (auto) stepEntry(st, cs, ind, i, p, signalAt(cs, ind, i, p));
+    if (auto && dayGuard(st, bar.time, p)) stepEntry(st, cs, ind, i, p, signalAt(cs, ind, i, p));
     st.curve.push({ time: bar.time, value: st.equity + unreal(st, bar.close, bar.time, p) });
     st.lastTime = bar.time;
   }
@@ -467,15 +526,19 @@ const Core = (() => {
   }
   const openCount = pf => Object.values(pf.slots).filter(s => s.pos || s.pending).length;
   // process all sets for bar time t (each set: index i with cs[i].time === t)
-  function portfolioStep(pf, items, p, maxPos) {
+  // opts.eligible(sym, t) → may open new positions in this coin now; opts.maxSameDir → cap positions in one direction
+  function portfolioStep(pf, items, p, maxPos, opts = {}) {
     const q = { ...p, lev: p.lev / maxPos };
     for (const { slot, cs, ind, i } of items) { stepExits(slot, cs, ind, i, q); slot.lastClose = cs[i].close; slot.lastTime = cs[i].time; }
-    const sigs = items.map(x => ({ ...x, sig: signalAt(x.cs, x.ind, x.i, q) })).filter(x => x.sig)
+    const t0 = items[0].cs[items[0].i].time, canEnter = dayGuard(pf, t0, q);
+    const sameDir = d => Object.values(pf.slots).filter(s => (s.pos && s.pos.dir === d) || (s.pending && s.pending.lv.dir === d)).length;
+    const sigs = (canEnter ? items : []).map(x => ({ ...x, sig: signalAt(x.cs, x.ind, x.i, q) }))
+      .filter(x => x.sig && (!opts.eligible || opts.eligible(x.slot.sym, x.cs[x.i].time)))
       .sort((a, b) => Math.abs(b.ind.score[b.i] ?? 0) - Math.abs(a.ind.score[a.i] ?? 0));
     for (const x of sigs) {
       const s = x.slot;
       if (s.pos && x.sig.dir !== s.pos.dir && q.exitOpp) closePos(s, x.cs[x.i].time, x.cs[x.i].close, 'กลับตัว', q);
-      if (!s.pos && !s.pending && openCount(pf) < maxPos) stepEntry(s, x.cs, x.ind, x.i, q, x.sig);
+      if (!s.pos && !s.pending && openCount(pf) < maxPos && !(opts.maxSameDir > 0 && sameDir(x.sig.dir) >= opts.maxSameDir)) stepEntry(s, x.cs, x.ind, x.i, q, x.sig);
     }
     const t = items[0].cs[items[0].i].time;
     let u = 0;
@@ -483,7 +546,7 @@ const Core = (() => {
     pf.curve.push({ time: t, value: pf.equity + u });
     pf.lastTime = t;
   }
-  function portfolioBacktest(sets, p, maxPos = 5, fromTime = -Infinity, toTime = Infinity) {
+  function portfolioBacktest(sets, p, maxPos = 5, fromTime = -Infinity, toTime = Infinity, opts = {}) {
     const pf = newPortfolio(p.bal, sets.map(s => s.sym)), byTime = new Map();
     for (const s of sets) {
       const last = s.last ?? s.cs.length - 2;
@@ -494,8 +557,23 @@ const Core = (() => {
         byTime.get(t).push({ slot: pf.slots[s.sym], cs: s.cs, ind: s.ind, i });
       }
     }
-    for (const t of [...byTime.keys()].sort((a, b) => a - b)) portfolioStep(pf, byTime.get(t), p, maxPos);
+    for (const t of [...byTime.keys()].sort((a, b) => a - b)) portfolioStep(pf, byTime.get(t), p, maxPos, opts);
     return pf;
+  }
+  // Point-in-time universe: each month, the top N coins by trailing quote volume (reduces survivorship bias)
+  function dynamicUniverse(sets, topN, lookbackDays = 30) {
+    const cum = sets.map(s => { let a = 0; return { sym: s.sym, t: s.cs.map(c => c.time), v: s.cs.map(c => (a += c.qv ?? c.volume * c.close)) }; });
+    const at = (x, t) => { let lo = 0, hi = x.t.length - 1, r = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (x.t[m] < t) { r = m; lo = m + 1; } else hi = m - 1; } return r < 0 ? 0 : x.v[r]; };
+    const cache = new Map();
+    return (sym, t) => {
+      const d = new Date(t * 1000), key = d.getUTCFullYear() * 12 + d.getUTCMonth();
+      if (!cache.has(key)) {
+        const m0 = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 1000, from = m0 - lookbackDays * 86400;
+        const ranked = cum.map(x => ({ sym: x.sym, vol: at(x, m0) - at(x, from) })).filter(x => x.vol > 0).sort((a, b) => b.vol - a.vol);
+        cache.set(key, new Set(ranked.slice(0, topN).map(x => x.sym)));
+      }
+      return cache.get(key).has(sym);
+    };
   }
   // per-year breakdown of trades
   function byYear(trades) {
@@ -542,8 +620,8 @@ const Core = (() => {
   }
 
   return { sma, ema, rma, rsi, atr, macd, bollinger, stoch, adx, supertrend, ichimoku, psar, cci, willr, mfi, obv, vwap, donchian,
-    VOTE_NAMES, STRATS, STYLES, FILTERS, passFilters, alignDaily, alignDailyTrend, alignSeries, indicators, votes, score, minRiskPct, levels, signalAt, backtestRange, walkForward,
+    VOTE_NAMES, STRATS, STYLES, FILTERS, passFilters, alignDaily, alignDailyTrend, alignSeries, indicators, votes, score, minRiskPct, levels, signalAt, lastSignal, plan, backtestRange, walkForward,
     newState, openPos, closePos, closePart, checkBar, manage, checkPrice, unreal, fillPending, stepExits, stepEntry, step, backtest, stats, compareAll,
-    newPortfolio, portfolioStep, portfolioBacktest, byYear };
+    newPortfolio, portfolioStep, portfolioBacktest, dynamicUniverse, dayGuard, byYear };
 })();
 if (typeof module !== 'undefined') module.exports = Core;

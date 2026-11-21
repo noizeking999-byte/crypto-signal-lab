@@ -20,7 +20,9 @@ button.up{background:var(--up);border-color:var(--up);color:#fff}button.dn{backg
 main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;padding:12px 16px}
 @media(max-width:1000px){main{grid-template-columns:minmax(0,1fr)}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
-#chart{height:480px}#eqchart{height:150px}
+#chart{height:480px}
+nav#tabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 0}nav#tabs button{background:transparent;border-color:transparent;color:var(--mute)}nav#tabs button.on{background:var(--panel);border-color:var(--line);color:var(--ink);font-weight:600}
+.card[hidden],.col[hidden]{display:none}#eqchart{height:150px}
 .sig{font-size:26px;font-weight:600;margin:2px 0 8px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px}.kv span:nth-child(odd){color:var(--mute)}.kv span:nth-child(even){text-align:right}
 h2{font-size:15px;margin:0 0 10px;color:var(--mute);font-weight:600}
@@ -47,20 +49,23 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
   <input id="sym" value="BTCUSDT" aria-label="คู่เหรียญ">
   <select id="style" aria-label="สไตล์การเทรด"></select>
   <select id="tf" aria-label="Timeframe"><option>1m</option><option>5m</option><option>15m</option><option>30m</option><option>1h</option><option selected>4h</option><option>1d</option><option>1w</option></select>
-  <select id="bars" aria-label="จำนวนแท่ง"><option value="1000">1000 แท่ง</option><option value="2000" selected>2000 แท่ง</option><option value="5000">5000 แท่ง</option></select>
+  <select id="bars" aria-label="จำนวนแท่ง"><option value="1000">1000 แท่ง</option><option value="2000">2000 แท่ง</option><option value="5000">5000 แท่ง</option><option value="10000" selected>10000 แท่ง</option><option value="20000">20000 แท่ง (4h ≈ 9 ปี)</option></select>
   <button class="pri" id="load">โหลด / วิเคราะห์</button>
   <span id="evTop" class="r" style="font-size:13px"></span>
   <span id="status">ยังไม่ได้โหลดข้อมูล</span>
 </header>
+<nav id="tabs">
+  <button data-t="overview" class="on">ภาพรวม</button><button data-t="market">วาฬ & ตลาดโลก</button><button data-t="backtest">Backtest</button><button data-t="paper">Paper พอร์ต</button><button data-t="settings">ตั้งค่า & สถานะ</button>
+</nav>
 <main>
-  <div class="col">
-    <div class="card"><div id="chart"></div></div>
-    <div class="card">
+  <div class="col" id="colL">
+    <div class="card" data-tab="overview"><div id="chart"></div></div>
+    <div class="card" data-tab="overview">
       <h2>ภาพรวมทุก Timeframe (เล่นสั้น → เล่นยาว) · อัปเดตทุก 30 วินาที</h2>
-      <div class="scroll"><table id="mtf"><tr><td class="m">กำลังโหลด...</td></tr></table></div>
-      <div class="note">คะแนน = ผลโหวตของ 16 อินดิเคเตอร์ (−100 ขาลงทั้งหมด … +100 ขาขึ้นทั้งหมด) · สัญญาณ = ตามกลยุทธ์ที่เลือก ภายใน 3 แท่งล่าสุด</div>
+      <div class="scroll" style="max-height:560px"><table id="mtf"><tr><td class="m">กำลังโหลด...</td></tr></table></div>
+      <div class="note">คะแนน = ผลโหวตของ 16 อินดิเคเตอร์ (−100 ขาลงทั้งหมด … +100 ขาขึ้นทั้งหมด) · สัญญาณล่าสุด = ครั้งล่าสุดที่กลยุทธ์ออกสัญญาณ พร้อมผล · จุดรอเข้า = ราคาที่ต้องปิดผ่านเพื่อเกิดสัญญาณใหม่ (SL/TP คำนวณจากจุดนั้น)</div>
     </div>
-    <div class="card">
+    <div class="card" data-tab="market">
       <h2>ตลาดโลก & ข่าว</h2>
       <table id="macroTbl"><tr><td class="m">กำลังโหลด...</td></tr></table>
       <div class="note" id="macroNote"></div>
@@ -70,14 +75,14 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
       </div>
       <div class="note">ปฏิทินและข่าวใช้ประกอบการตัดสินใจเท่านั้น ไม่ได้ใช้คำนวณสัญญาณ (ไม่มีข้อมูลย้อนหลังให้พิสูจน์) · คะแนนข่าวคิดจากคำในหัวข่าวแบบง่าย</div>
     </div>
-    <div class="card">
+    <div class="card" data-tab="market">
       <h2>Whale Tracker: วาฬกำลังซื้อ/ขายเหรียญไหน (ไม้ใหญ่ Spot แบบ real-time)</h2>
       <div class="scroll"><table id="whaleTbl"><tr><td class="m">กำลังเชื่อมต่อ...</td></tr></table></div>
       <div class="note" id="whaleNote"></div>
       <h2 style="margin-top:12px">ไม้วาฬล่าสุด</h2>
       <div class="scroll" style="max-height:220px"><table id="whaleFeed"><tr><td class="m">รอไม้ใหญ่...</td></tr></table></div>
     </div>
-    <div class="card">
+    <div class="card" data-tab="backtest">
       <h2>Backtest (จำลองย้อนหลัง หักค่าธรรมเนียม + slippage + funding แล้ว)</h2>
       <div class="stats" id="btStats"></div>
       <div class="note r" id="btWarn"></div>
@@ -90,9 +95,48 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
       <h2 style="margin-top:12px">รายการเทรด</h2>
       <div class="scroll"><table id="btTable"></table></div>
     </div>
+    <div class="card" data-tab="backtest">
+      <h2>Backtest พอร์ตหลายเหรียญ (เงินก้อนเดียว ถือพร้อมกันไม่เกิน N ไม้ · ใช้ timeframe/จำนวนแท่ง/ค่าตั้งปัจจุบัน)</h2>
+      <input id="pfSyms" style="width:100%" value="BTCUSDT,ETHUSDT,BNBUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,LTCUSDT,LINKUSDT,SOLUSDT,AVAXUSDT" aria-label="รายชื่อเหรียญ">
+      <div class="row"><label>ถือพร้อมกันสูงสุด <input id="pfMax" type="number" value="3" style="width:70px"></label><button class="pri" id="pfRun">รัน Backtest พอร์ต</button><span class="m" id="pfStatus"></span></div>
+      <div class="stats" id="pfStats"></div>
+      <div class="two"><div><h2>รายปี</h2><table id="pfYear"></table></div><div><h2>รายเหรียญ</h2><div class="scroll"><table id="pfCoin"></table></div></div></div>
+      <div id="pfChart" style="height:180px;margin-top:10px"></div>
+    </div>
+    <div class="card" data-tab="paper">
+      <h2>Paper พอร์ต: เทรดจำลองหลายเหรียญพร้อมกันกับราคาจริง (อัปเดตทุกนาที ตัดสินที่แท่งปิด)</h2>
+      <input id="ppSyms" style="width:100%" aria-label="เหรียญ">
+      <div class="row"><label>ถือพร้อมกันสูงสุด <input id="ppMax" type="number" value="3" style="width:70px"></label><label>ทุน <input id="ppBal" type="number" value="1000" style="width:100px"></label>
+        <button class="pri" id="ppStart">เริ่มใหม่</button><button id="ppStop">หยุด</button><button id="ppCsv">Export CSV</button><span class="m" id="ppStatus"></span></div>
+      <div class="stats" id="ppStats"></div>
+      <div id="ppCheck"></div>
+      <h2 style="margin-top:12px">สถานะที่ถืออยู่</h2><div class="scroll"><table id="ppPos"></table></div>
+      <h2 style="margin-top:12px">ประวัติเทรด</h2><div class="scroll"><table id="ppTrades"></table></div>
+      <div id="ppChart" style="height:180px;margin-top:10px"></div>
+      <div class="note">ใช้กลยุทธ์ ตัวกรอง และวิธีออกจากค่าตั้งปัจจุบัน · timeframe ตามที่เลือกตอนกดเริ่ม · ระบบเทียบผลจริงกับ backtest ให้อัตโนมัติ ถ้าแย่กว่าที่คาดอย่างมีนัยสำคัญจะเตือน</div>
+    </div>
+    <div class="card" data-tab="settings">
+      <h2>แจ้งเตือนเข้า Telegram</h2>
+      <label class="row">Bot token <input id="tgToken" type="password" style="width:100%" placeholder="123456:ABC..."></label>
+      <label class="row">Chat ID <input id="tgChat" style="width:200px"> <button id="tgFind">หา Chat ID อัตโนมัติ</button></label>
+      <div class="row"><label><input type="checkbox" id="tgOn" style="width:auto"> เปิดใช้</label><label><input type="checkbox" id="tgSig" checked style="width:auto"> สัญญาณ</label><label><input type="checkbox" id="tgPaper" checked style="width:auto"> Paper พอร์ต</label><label><input type="checkbox" id="tgCal" checked style="width:auto"> ข่าวแรง</label><label><input type="checkbox" id="tgWhale" style="width:auto"> ไม้วาฬ</label><button id="tgTest">ส่งข้อความทดสอบ</button></div>
+      <div class="note" id="tgNote">วิธีตั้ง: 1) คุยกับ @BotFather ใน Telegram พิมพ์ /newbot แล้วคัดลอก token มาวาง 2) ส่งข้อความอะไรก็ได้หาบอทของคุณ 3) กด "หา Chat ID อัตโนมัติ" · token เก็บไว้ในเครื่องนี้เท่านั้น</div>
+    </div>
+    <div class="card" data-tab="settings">
+      <h2>สถานะแหล่งข้อมูล</h2>
+      <table id="diag"></table>
+      <div class="note">อัปเดตทุก 5 วินาที · ถ้าแหล่งไหนล้มเหลวต่อเนื่อง ส่วนที่ใช้ข้อมูลนั้นจะไม่อัปเดต</div>
+    </div>
   </div>
-  <div class="col">
-    <div class="card">
+  <div class="col" id="colR">
+    <div class="card" data-tab="overview">
+      <h2>สรุปการตัดสินใจ</h2>
+      <div class="sig" id="decTitle">–</div>
+      <div class="kv" id="decKv"></div>
+      <div class="log" id="decList" style="max-height:none"></div>
+      <div class="note">✓ = ผ่าน · ✗ = ไม่ผ่าน · ข้อที่มี * เป็นเงื่อนไขบังคับ · เป็นตัวช่วยตัดสินใจ ไม่ใช่คำแนะนำการลงทุน</div>
+    </div>
+    <div class="card" data-tab="overview">
       <h2>วิเคราะห์ Real-time (แท่งปัจจุบัน)</h2>
       <div class="sig" id="liveTitle" style="font-size:22px">–</div>
       <div class="kv"><span>คะแนนรวม</span><span class="num" id="scoreTxt">–</span></div>
@@ -101,7 +145,7 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
       <div class="votes" id="votes"></div>
       <div class="note">อัปเดตทุกวินาทีตามราคาจริง · สัญญาณที่กำลังก่อตัวอาจหายไปก่อนแท่งปิด</div>
     </div>
-    <div class="card">
+    <div class="card" data-tab="market">
       <h2 id="wsTitle">วาฬในเหรียญนี้</h2>
       <div class="kv" id="whaleSpotKv"></div>
       <h2 style="margin-top:12px">รายใหญ่ฝั่ง Futures (Binance top traders, 1 ชม.)</h2>
@@ -110,14 +154,14 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
       <h2 style="margin-top:12px">กำแพงออเดอร์ (±3% จากราคา)</h2>
       <div class="kv" id="wallKv"><span class="m">กำลังโหลด...</span><span></span></div>
     </div>
-    <div class="card">
+    <div class="card" data-tab="overview">
       <h2>สัญญาณยืนยันล่าสุด (แท่งที่ปิดแล้ว)</h2>
       <div class="sig" id="sigTitle">–</div>
       <div class="kv" id="sigKv"></div>
       <h2 style="margin-top:12px">บันทึกสัญญาณ</h2>
       <div class="log" id="log"><span class="m">ยังไม่มี</span></div>
     </div>
-    <div class="card">
+    <div class="card" data-tab="overview">
       <h2>Paper Trading (เทรดจำลองกับราคาจริง)</h2>
       <div class="row"><button class="pri" id="ptStart">เริ่ม Auto</button><button id="ptStop">หยุด</button><button id="ptReset">รีเซ็ต</button></div>
       <div class="row"><button class="up" id="mLong">Long</button><button class="dn" id="mShort">Short</button><button id="mClose">ปิดสถานะ</button></div>
@@ -125,7 +169,7 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
       <div class="scroll"><table id="ptTable"></table></div>
       <div class="note">Auto = เปิด/ปิดตามสัญญาณยืนยัน · Long/Short = เปิดเองที่ราคาปัจจุบัน (SL/TP ตาม ATR)</div>
     </div>
-    <div class="card">
+    <div class="card" data-tab="settings">
       <details open><summary>ตั้งค่า</summary>
         <label>กลยุทธ์ <select id="p_strategy"></select></label>
         <div id="filterBox"></div>
@@ -138,6 +182,11 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
         <label>ATR <input type="number" id="p_atr" value="14"></label>
         <label>SL = ATR × <input type="number" step="0.1" id="p_slAtr" value="3"></label>
         <label>TP = SL × (R) <input type="number" step="0.1" id="p_tpR" value="3"></label>
+        <label>วิธีออกจากไม้ <select id="p_exitMode"><option value="fixed">SL/TP คงที่ (แนะนำ Breakout)</option><option value="trail">Trailing stop ตาม ATR (ไม่มี TP)</option><option value="be">เลื่อน SL ไปทุนเมื่อกำไร 1R</option><option value="partial">ขายครึ่งที่ 1R แล้ว SL ไปทุน</option></select></label>
+        <label>Trailing = ATR × <input type="number" step="0.5" id="p_trailAtr" value="4"></label>
+        <label>ปิดเมื่อถือเกิน (แท่ง, 0 = ปิด) <input type="number" id="p_maxBars" value="0"></label>
+        <label>เข้า/TP ด้วย Limit order <input type="checkbox" id="p_limit" style="width:auto"></label>
+        <label>ค่าธรรมเนียม Maker (%) <input type="number" step="0.01" id="p_makerFee" value="0.02"></label>
         <label>SL ห่างขั้นต่ำ (% ของราคา) <input type="number" step="0.05" id="p_minSl" value="0.2"></label>
         <label>TP ต้อง ≥ ต้นทุนไป-กลับ × <input type="number" step="0.5" id="p_minEdge" value="3"></label>
         <label>เสี่ยงต่อไม้ (%) <input type="number" step="0.1" id="p_risk" value="1"></label>
@@ -168,6 +217,18 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
 <script>
 {
 const $ = id => document.getElementById(id);
+// ---- Source diagnostics: record every fetch / websocket by host ----
+const DIAG = {}, SRC_NAME = { 'api.binance.com': 'Binance Spot', 'data-api.binance.vision': 'Binance (สำรอง)', 'fapi.binance.com': 'Binance Futures', 'stream.binance.com': 'Binance real-time (WebSocket)',
+  'query1.finance.yahoo.com': 'Yahoo (DXY/ทอง/น้ำมัน)', 'api.alternative.me': 'Fear & Greed', 'nfs.faireconomy.media': 'ปฏิทินเศรษฐกิจ', 'www.coindesk.com': 'ข่าว CoinDesk', 'cointelegraph.com': 'ข่าว Cointelegraph', 'api.telegram.org': 'Telegram' };
+function diag(host, err) {
+  const d = DIAG[host] ||= { ok: 0, fail: 0, lastOk: null, lastErr: null, errAt: null };
+  if (err) { d.fail++; d.lastErr = String(err).slice(0, 120); d.errAt = Date.now(); } else { d.ok++; d.lastOk = Date.now(); }
+}
+const _fetch = window.fetch.bind(window);
+window.fetch = async (u, o) => {
+  let host = ''; try { host = new URL(u).hostname; } catch {}
+  try { const r = await _fetch(u, o); diag(host, r.ok ? null : 'HTTP ' + r.status); return r; } catch (e) { diag(host, e.message || 'network error'); throw e; }
+};
 const HOSTS = ['https://api.binance.com', 'https://data-api.binance.vision'];
 const TFS = ['5m', '15m', '1h', '4h', '1d'];
 const TZ = -new Date().getTimezoneOffset() * 60;
@@ -179,12 +240,13 @@ const voteTxt = v => v == null ? '<span class="m">–</span>' : v > 0 ? '<span c
 const distPct = (lv, x) => `<span class="m">(${x > lv.entry ? '+' : ''}${fmt((x - lv.entry) / lv.entry * 100, 2)}%)</span>`;
 const scoreCls = s => s == null ? 'm' : s >= 30 ? 'g' : s <= -30 ? 'r' : 'm';
 
+let lastLs = null, lastPl = null, btStat = null, liveScore = null, liveSig = null;
 let P, cs = [], ind = null, sym = '', tf = '', ws = null, paper = null, paperOn = false, lines = [];
 
 // ---- Settings (persisted) ----
-const NUMS = ['conf', 'adxMin', 'fast', 'slow', 'trend', 'rsi', 'atr', 'slAtr', 'tpR', 'risk', 'lev', 'fee', 'slip', 'funding', 'bal', 'whaleBig', 'whaleSmall', 'whaleAlert', 'whaleN', 'minSl', 'minEdge'];
+const NUMS = ['conf', 'adxMin', 'fast', 'slow', 'trend', 'rsi', 'atr', 'slAtr', 'tpR', 'risk', 'lev', 'fee', 'slip', 'funding', 'bal', 'whaleBig', 'whaleSmall', 'whaleAlert', 'whaleN', 'minSl', 'minEdge', 'trailAtr', 'maxBars', 'makerFee'];
 const FKEYS = Object.keys(Core.FILTERS);
-const BOOLS = ['p_shorts', 'p_exitOpp', 'a_sound', 'a_notify', 'a_forming'].concat(FKEYS);
+const BOOLS = ['p_shorts', 'p_exitOpp', 'p_limit', 'a_sound', 'a_notify', 'a_forming'].concat(FKEYS);
 const SETTINGS_V = 3; // bump to reset strategy defaults after analysis changes
 $('filterBox').innerHTML = '<div class="m" style="margin:6px 0 2px">ตัวกรองสัญญาณ (ผ่านการทดสอบด้วยข้อมูลจริง)</div>' + FKEYS.map(k => `<label>${Core.FILTERS[k].name} <input type="checkbox" id="${k}" ${k === 'fDxy' ? 'checked' : ''} style="width:auto"></label>`).join('');
 $('p_strategy').innerHTML = Object.entries(Core.STRATS).map(([k, s]) => `<option value="${k}">${s.name}</option>`).join('');
@@ -193,11 +255,12 @@ $('style').innerHTML = '<option value="">สไตล์: กำหนดเอ�
 function readParams() {
   const p = { strategy: $('p_strategy').value, shorts: $('p_shorts').checked, exitOpp: $('p_exitOpp').checked };
   FKEYS.forEach(k => p[k] = $(k).checked);
+  p.exitMode = $('p_exitMode').value; p.limit = $('p_limit').checked;
   NUMS.forEach(k => p[k] = parseFloat($('p_' + k).value) || 0);
   return p;
 }
 function saveSettings() {
-  const s = { sym: $('sym').value, tf: $('tf').value, bars: $('bars').value, style: $('style').value, strategy: $('p_strategy').value, n: {}, b: {}, v: SETTINGS_V };
+  const s = { sym: $('sym').value, tf: $('tf').value, bars: $('bars').value, style: $('style').value, strategy: $('p_strategy').value, exitMode: $('p_exitMode').value, n: {}, b: {}, v: SETTINGS_V };
   NUMS.forEach(k => s.n[k] = $('p_' + k).value); BOOLS.forEach(k => s.b[k] = $(k).checked);
   store.set('settings', s);
 }
@@ -211,6 +274,7 @@ function saveSettings() {
   }
   ['sym', 'tf', 'bars', 'style'].forEach(k => { if (s[k] != null) $(k).value = s[k]; });
   if (s.strategy) $('p_strategy').value = s.strategy;
+  if (s.exitMode) $('p_exitMode').value = s.exitMode;
   NUMS.forEach(k => { if (s.n?.[k] != null) $('p_' + k).value = s.n[k]; });
   BOOLS.forEach(k => { if (s.b?.[k] != null) $(k).checked = s.b[k]; });
 })();
@@ -284,6 +348,7 @@ function recompute(full) {
 // ---- Backtest + comparison ----
 function runBacktest() {
   const st = Core.backtest(cs, ind, P, lastClosed()), s = Core.stats(st);
+  btStat = s;
   $('btStats').innerHTML = [
     ['จำนวนเทรด', s.n], ['Win rate', fmt(s.win, 1) + '%'], ['กำไรสุทธิ', `<span class="${s.net >= 0 ? 'g' : 'r'}">${fmt(s.net, 2)}%</span>`],
     ['Win% ที่ต้องได้ (คุ้มทุน)', s.beWin == null ? '–' : fmt(s.beWin, 1) + '%'],
@@ -313,30 +378,36 @@ function tradeRows(tr) {
 }
 
 // ---- Confirmed signal ----
-function renderSignal() {
-  const i = lastClosed(), c = cs[i];
-  let sig = null, at = i;
-  for (let j = i; j > i - 5 && j > 0; j--) { sig = Core.signalAt(cs, ind, j, P); if (sig) { at = j; break; } }
-  const trendUp = c.close > ind.trend[i];
-  let kv;
-  if (sig) {
-    $('sigTitle').innerHTML = `${dirTxt(sig.dir)} <small class="m" style="font-size:13px">${i === at ? 'แท่งล่าสุด' : (i - at) + ' แท่งก่อน'}</small>`;
-    kv = [['จุดเข้า', fmt(sig.entry)], ['Stop loss', `<span class="r">${fmt(sig.sl)}</span> ${distPct(sig, sig.sl)}`], ['Take profit', `<span class="g">${fmt(sig.tp)}</span> ${distPct(sig, sig.tp)}`], ['R:R', '1 : ' + P.tpR]];
-  } else {
-    const hyp = Core.levels(trendUp ? 1 : -1, c.close, ind.atr[i], P);
-    $('sigTitle').innerHTML = '<span class="m">รอสัญญาณ</span>';
-    kv = [[`ถ้าเข้า ${trendUp ? 'Long' : 'Short'} ตอนนี้: SL`, `${fmt(hyp.sl)} ${distPct(hyp, hyp.sl)}`], ['TP', `${fmt(hyp.tp)} ${distPct(hyp, hyp.tp)}`]];
-  }
-  kv.push(['กลยุทธ์', Core.STRATS[P.strategy].name]);
-  $('sigKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
-  drawLines(sig);
+const STATUS = { open: '<span class="g">ยังถืออยู่</span>', TP: '<span class="g">ถึง TP แล้ว</span>', SL: '<span class="r">โดน SL แล้ว</span>' };
+function lastSigHtml(ls) {
+  if (!ls) return '<span class="m">ยังไม่เคยเกิด</span>';
+  const st = STATUS[ls.status] || `<span class="m">ปิดแล้ว (${ls.status})</span>`;
+  return `${dirTxt(ls.sig.dir)} <span class="m">${ls.ago ? ls.ago + ' แท่งก่อน' : 'แท่งล่าสุด'}</span><br><span class="num" style="font-size:12px">เข้า ${fmt(ls.sig.entry)} · SL <span class="r">${fmt(ls.sig.sl)}</span> · TP <span class="g">${fmt(ls.sig.tp)}</span></span><br>${st} <span class="num ${ls.r >= 0 ? 'g' : 'r'}">${ls.r == null ? '' : (ls.r >= 0 ? '+' : '') + fmt(ls.r, 2) + 'R'}</span>`;
 }
-function drawLines(sig) {
+function planHtml(x, d) {
+  if (!x || x.entry == null) return '–';
+  const head = x.allowed ? '' : `<span class="r">ตัวกรองปิดอยู่${x.blocked.length ? ' (' + x.blocked.join(', ') + ')' : ''}</span><br>`;
+  const trig = x.trigger != null ? `${d === 1 ? 'ปิดเหนือ' : 'ปิดใต้'} ${fmt(x.trigger)}` : 'เมื่อเกิดสัญญาณ ≈ ราคาปัจจุบัน';
+  return `${head}<span class="num" style="font-size:12px;${x.allowed ? '' : 'opacity:.55'}">${trig}<br>SL <span class="r">${fmt(x.sl)}</span> · TP <span class="g">${fmt(x.tp)}</span></span><br><span class="m" style="font-size:11px">${x.cond}</span>`;
+}
+function renderSignal() {
+  const i = lastClosed(), ls = Core.lastSignal(cs, ind, P, i), pl = Core.plan(cs, ind, P, i);
+  const active = ls && ls.status === 'open' ? ls.sig : null;
+  $('sigTitle').innerHTML = ls ? `${dirTxt(ls.sig.dir)} <small class="m" style="font-size:13px">${ls.ago ? ls.ago + ' แท่งก่อน' : 'แท่งล่าสุด'} · ${STATUS[ls.status] || 'ปิดแล้ว (' + ls.status + ')'}</small>` : '<span class="m">ยังไม่มีสัญญาณในข้อมูลที่โหลด</span>';
+  const kv = [];
+  if (ls) kv.push(['จุดเข้า', fmt(ls.sig.entry)], ['Stop loss', `<span class="r">${fmt(ls.sig.sl)}</span> ${distPct(ls.sig, ls.sig.sl)}`], ['Take profit', `<span class="g">${fmt(ls.sig.tp)}</span> ${distPct(ls.sig, ls.sig.tp)}`], ['ผลตอนนี้', `<span class="${ls.r >= 0 ? 'g' : 'r'}">${ls.r == null ? '–' : fmt(ls.r, 2) + 'R'}</span>`]);
+  kv.push(['รอเข้า Long', planHtml(pl.long, 1)], ['รอเข้า Short', planHtml(pl.short, -1)], ['กลยุทธ์', Core.STRATS[P.strategy].name]);
+  $('sigKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num" style="white-space:normal">${v}</span>`).join('');
+  drawLines(active, pl);
+  lastLs = ls; lastPl = pl;
+}
+function drawLines(sig, pl) {
   lines.forEach(l => candle.removePriceLine(l)); lines = [];
   const add = (price, color, title, style = 2) => lines.push(candle.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }));
   const ps = paper && paper.pos;
   if (ps) { add(ps.entry, '#f0b90b', 'Paper เข้า', 0); add(ps.sl, '#ef5350', 'Paper SL', 0); add(ps.tp, '#26a69a', 'Paper TP', 0); }
   else if (sig) { add(sig.entry, '#f0b90b', 'Entry'); add(sig.sl, '#ef5350', 'SL'); add(sig.tp, '#26a69a', 'TP'); }
+  else if (pl) for (const [x, name] of [[pl.long, 'รอ Long'], [pl.short, 'รอ Short']]) if (x && x.allowed && x.trigger != null) add(x.trigger, name === 'รอ Long' ? '#26a69a' : '#ef5350', name, 1);
 }
 
 // ---- Alerts ----
@@ -357,11 +428,13 @@ function alertSig(kind, sig, time, label = `${sym} ${tf}`) {
   const key = `${label}|${kind}|${time}|${sig.dir}`;
   if (alerted.has(key)) return;
   alerted.add(key);
-  notify(`${label} ${kind}: ${sig.dir === 1 ? 'LONG' : 'SHORT'} @ ${fmt(sig.entry)} · SL ${fmt(sig.sl)} · TP ${fmt(sig.tp)}`, sig.dir);
+  notify(`${label} ${kind}: ${sig.dir === 1 ? 'LONG' : 'SHORT'} @ ${fmt(sig.entry)} · SL ${fmt(sig.sl)} · TP ${fmt(sig.tp)}`, sig.dir, 'sig');
 }
-function notify(msg, dir) {
+function notify(msg, dir, kind = 'sig') {
   const log = $('log'); if (log.querySelector('.m')) log.innerHTML = '';
-  log.insertAdjacentHTML('afterbegin', `<div><span class="m num">${new Date().toLocaleTimeString('th-TH')}</span> ${msg.replace(/LONG|SHORT/, m => dirTxt(m === 'LONG' ? 1 : -1))}</div>`);
+  const safe = msg.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  log.insertAdjacentHTML('afterbegin', `<div><span class="m num">${new Date().toLocaleTimeString('th-TH')}</span> ${safe.replace(/LONG|SHORT/, m => dirTxt(m === 'LONG' ? 1 : -1))}</div>`);
+  tgSend(msg, kind);
   while (log.children.length > 50) log.lastChild.remove();
   if ($('a_sound').checked) beep(dir);
   if ($('a_notify').checked && 'Notification' in window) {
@@ -383,7 +456,8 @@ function connectWS() {
     applyBar({ time: k.t / 1000, open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v });
   };
   ws.onclose = () => { status('การเชื่อมต่อหลุด กำลังต่อใหม่...'); setTimeout(() => { if (sym === s && tf === t) connectWS(); }, 3000); };
-  ws.onopen = () => status(`${sym} ${tf} · ${cs.length} แท่ง · live`);
+  ws.onopen = () => { diag('stream.binance.com'); status(`${sym} ${tf} · ${cs.length} แท่ง · live`); };
+  ws.onerror = () => diag('stream.binance.com', 'WebSocket error');
 }
 function applyBar(bar) {
   if (!cs.length) return;
@@ -416,6 +490,8 @@ function liveAnalyze() {
   $('liveKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
   $('votes').innerHTML = allVotes.map((v, k) => `<div><span class="m">${VOTE_NAMES[k]}</span>${voteTxt(v)}</div>`).join('');
   if (sig && $('a_forming').checked) alertSig('กำลังก่อตัว', sig, c.time);
+  liveScore = sc; liveSig = sig;
+  renderDecision();
 }
 // Watchdog: REST fallback when WebSocket is silent
 setInterval(async () => {
@@ -442,18 +518,16 @@ async function scanMTF() {
       const k = t === tf && cs.length ? cs.slice(-400) : await fetchKlines(s, t, 400);
       const I = Core.indicators(k, P), i = k.length - 2;
       I.ext = buildExt(k, t);
-      let sig = null, at = i;
-      for (let j = i; j > i - 3; j--) { sig = Core.signalAt(k, I, j, P); if (sig) { at = j; break; } }
-      if (sig && i === at && t !== tf) alertSig('ยืนยัน', sig, k[i].time, `${s} ${t}`);
+      const ls = Core.lastSignal(k, I, P, i), pl = Core.plan(k, I, P, i);
+      if (ls && ls.ago === 0 && t !== tf) alertSig('ยืนยัน', ls.sig, k[i].time, `${s} ${t}`);
       const style = Object.values(Core.STYLES).find(x => x.tf === t);
       rows.push(`<tr class="click ${t === tf ? 'sel' : ''}" data-tf="${t}"><td><b>${t}</b> <span class="m">${style ? style.name : ''}</span></td>
         <td class="num ${scoreCls(I.score[k.length - 1])}">${fmt(I.score[k.length - 1], 0)}</td>
         <td>${k[i].close > I.trend[i] ? '<span class="g">ขึ้น</span>' : '<span class="r">ลง</span>'}</td>
-        <td>${sig ? dirTxt(sig.dir) + ` <span class="m">${i - at ? (i - at) + ' แท่งก่อน' : 'ล่าสุด'}</span>` : '<span class="m">รอ</span>'}</td>
-        <td class="num">${sig ? fmt(sig.entry) : '–'}</td><td class="num r">${sig ? fmt(sig.sl) : '–'}</td><td class="num g">${sig ? fmt(sig.tp) : '–'}</td></tr>`);
+        <td>${lastSigHtml(ls)}</td><td>${planHtml(pl.long, 1)}</td><td>${planHtml(pl.short, -1)}</td></tr>`);
     } catch (e) { rows.push(`<tr><td><b>${t}</b></td><td colspan="6" class="m">โหลดไม่ได้</td></tr>`); }
   }
-  if (s === sym) $('mtf').innerHTML = '<tr><th>Timeframe</th><th>คะแนน</th><th>เทรนด์</th><th>สัญญาณ</th><th>เข้า</th><th>SL</th><th>TP</th></tr>' + rows.join('');
+  if (s === sym) $('mtf').innerHTML = '<tr><th>Timeframe</th><th>คะแนน</th><th>เทรนด์</th><th>สัญญาณล่าสุด</th><th>จุดรอเข้า Long</th><th>จุดรอเข้า Short</th></tr>' + rows.join('');
   mtfBusy = false;
 }
 setInterval(scanMTF, 30000);
@@ -469,7 +543,7 @@ const wMerge = Whale.merger(o => {
   Whale.add(wbook, o.sym, o.T, o.usd, o.isSell);
   wFeed.unshift(o); if (wFeed.length > 40) wFeed.length = 40;
   wDirty = true;
-  if (o.usd >= P.whaleAlert) notify(`วาฬ ${o.sym}: ${o.isSell ? 'SHORT' : 'LONG'} ${o.isSell ? 'ขาย' : 'ซื้อ'} ${Whale.usd(o.usd)} @ ${fmt(o.price)}`, o.isSell ? -1 : 1);
+  if (o.usd >= P.whaleAlert) notify(`วาฬ ${o.sym}: ${o.isSell ? 'SHORT' : 'LONG'} ${o.isSell ? 'ขาย' : 'ซื้อ'} ${Whale.usd(o.usd)} @ ${fmt(o.price)}`, o.isSell ? -1 : 1, 'whale');
 });
 setInterval(() => wMerge.flushAll(), 500);
 async function getJSON(path, hosts = HOSTS) {
@@ -490,6 +564,7 @@ async function startWhale() {
   wws = new WebSocket('wss://stream.binance.com:9443/stream?streams=' + wSyms.map(s => s.toLowerCase() + '@aggTrade').join('/'));
   wws.onmessage = ev => { const d = JSON.parse(ev.data).data; if (!d) return; wPrice[d.s] = +d.p; wMerge.push(d.s, d.T, +d.p, +d.q, d.m); };
   wws.onclose = () => { wws = null; setTimeout(startWhale, 5000); };
+  wws.onerror = () => diag('stream.binance.com', 'WebSocket (whale) error');
 }
 function renderWhale() {
   if (!wSyms.length) return;
@@ -556,11 +631,11 @@ setInterval(updateWalls, 30000);
 // ---- External data: macro (Yahoo), Fear & Greed, BTC trend → filters ----
 const MACRO = [['dxy', 'DX-Y.NYB', 'ดอลลาร์ (DXY)', -1], ['gold', 'GC=F', 'ทองคำ', 1], ['oil', 'CL=F', 'น้ำมันดิบ', 1], ['spx', '^GSPC', 'S&P 500', 0], ['vix', '^VIX', 'VIX (ความกลัวหุ้น)', 0]];
 const macro = {}; let fngMap = {}, btcPts = null, btcPtsKey = '';
-function buildExt(k, t) {
+function buildExt(k, t, s = sym) {
   const ext = {};
   for (const [key] of MACRO) ext[key] = macro[key] ? Core.alignDailyTrend(k, macro[key].map) : null;
   ext.fng = Object.keys(fngMap).length ? Core.alignDaily(k, fngMap) : null;
-  ext.btcUp = sym !== 'BTCUSDT' && btcPts && btcPtsKey === t ? Core.alignSeries(k, btcPts) : null;
+  ext.btcUp = s !== 'BTCUSDT' && btcPts && btcPtsKey === t ? Core.alignSeries(k, btcPts) : null;
   return ext;
 }
 async function loadBtcRef() {
@@ -623,7 +698,7 @@ function renderCalendar() {
   const next = up.find(e => e.t - now <= 120 * 60000 && e.t - now >= -30 * 60000);
   $('evTop').textContent = next ? `ข่าวแรง: ${next.title} ${next.t > now ? 'อีก ' + Math.round((next.t - now) / 60000) + ' นาที' : 'เพิ่งประกาศ'} · ราคาอาจผันผวนแรง` : '';
   const soon = up.find(e => e.t - now <= 60 * 60000 && e.t > now);
-  if (soon && !calAlerted.has(soon.title + soon.t)) { calAlerted.add(soon.title + soon.t); notify(`ปฏิทิน: ${soon.title} (USD) จะประกาศใน ${Math.round((soon.t - now) / 60000)} นาที`, 0); }
+  if (soon && !calAlerted.has(soon.title + soon.t)) { calAlerted.add(soon.title + soon.t); notify(`ปฏิทิน: ${soon.title} (USD) จะประกาศใน ${Math.round((soon.t - now) / 60000)} นาที`, 0, 'cal'); }
 }
 setInterval(loadCalendar, 30 * 60000);
 setInterval(renderCalendar, 60000);
@@ -676,6 +751,225 @@ $('wfBtn').onclick = () => {
   $('wfApply').onclick = () => { $('p_slAtr').value = w.best.sl; $('p_tpR').value = w.best.tp; $('style').value = ''; applyParams(); };
 };
 
+// ---- Portfolio backtest ----
+const pfCfg = store.get('pfCfg'); if (pfCfg) { $('pfSyms').value = pfCfg.syms; $('pfMax').value = pfCfg.max; }
+const pfChart = LC.createChart($('pfChart'), { ...opts, timeScale: { ...opts.timeScale, visible: true } }), pfLine = pfChart.addLineSeries({ color: '#f0b90b', lineWidth: 2 });
+$('pfRun').onclick = async () => {
+  const syms = $('pfSyms').value.split(/[\s,]+/).map(x => x.trim().toUpperCase()).filter(Boolean), maxPos = Math.max(1, +$('pfMax').value || 3);
+  store.set('pfCfg', { syms: syms.join(','), max: maxPos });
+  const sets = [], bars = +$('bars').value;
+  for (const [k, s] of syms.entries()) {
+    $('pfStatus').textContent = `กำลังโหลด ${s} (${k + 1}/${syms.length})...`;
+    try { const c = await fetchKlines(s, tf, bars), I = Core.indicators(c, P); I.ext = buildExt(c, tf, s); sets.push({ sym: s, cs: c, ind: I }); }
+    catch (e) { $('pfStatus').textContent = `${s} โหลดไม่ได้ ข้าม`; }
+  }
+  if (!sets.length) return;
+  $('pfStatus').textContent = 'กำลังคำนวณ...';
+  await new Promise(r => setTimeout(r, 30));
+  const pf = Core.portfolioBacktest(sets, P, maxPos), st = Core.stats(pf);
+  $('pfStats').innerHTML = [['กำไรต่อปี (CAGR)', `<span class="${(st.cagr ?? 0) >= 0 ? 'g' : 'r'}">${fmt(st.cagr, 1)}%</span>`], ['Max drawdown', fmt(st.dd, 1) + '%'], ['จำนวนเทรด', st.n], ['Win rate', fmt(st.win, 1) + '%'],
+    ['เฉลี่ย R/ไม้', `<span class="${st.avgR >= 0 ? 'g' : 'r'}">${fmt(st.avgR, 2)}</span>`], ['เงินสุดท้าย', fmt(pf.equity, 0) + ' USDT']].map(([k, v]) => `<div><small>${k}</small><b class="num">${v}</b></div>`).join('');
+  $('pfYear').innerHTML = '<tr><th>ปี</th><th>เทรด</th><th>Win%</th><th>เฉลี่ย R</th></tr>' + Core.byYear(pf.trades).map(y => `<tr><td>${y.year}</td><td class="num">${y.n}</td><td class="num">${fmt(y.win, 0)}</td><td class="num ${y.avgR >= 0 ? 'g' : 'r'}">${fmt(y.avgR, 2)}</td></tr>`).join('');
+  const bySym = {};
+  pf.trades.forEach(t => { const b = bySym[t.sym] ||= { n: 0, w: 0, r: 0, pnl: 0 }; b.n++; b.r += t.r; b.pnl += t.pnl; if (t.pnl > 0) b.w++; });
+  $('pfCoin').innerHTML = '<tr><th>เหรียญ</th><th>เทรด</th><th>Win%</th><th>เฉลี่ย R</th><th>P/L</th></tr>' + Object.entries(bySym).sort((a, b) => b[1].pnl - a[1].pnl).map(([k, b]) => `<tr><td>${k.replace('USDT', '')}</td><td class="num">${b.n}</td><td class="num">${fmt(b.w / b.n * 100, 0)}</td><td class="num ${b.r >= 0 ? 'g' : 'r'}">${fmt(b.r / b.n, 2)}</td><td class="num ${b.pnl >= 0 ? 'g' : 'r'}">${fmt(b.pnl, 0)}</td></tr>`).join('');
+  pfLine.setData(pf.curve.map(c => ({ time: c.time + TZ, value: c.value }))); pfChart.timeScale().fitContent();
+  const first = new Date(Math.min(...sets.map(x => x.cs[0].time)) * 1000).toLocaleDateString('th-TH');
+  $('pfStatus').textContent = `${sets.length} เหรียญ · ${tf} · ตั้งแต่ ${first}`;
+};
+
+// ---- Tabs ----
+function showTab(t) {
+  document.querySelectorAll('nav#tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  document.querySelectorAll('.card[data-tab]').forEach(c => { c.hidden = c.dataset.tab !== t; });
+  for (const col of [$('colL'), $('colR')]) col.hidden = ![...col.children].some(c => !c.hidden);
+  document.querySelector('main').style.gridTemplateColumns = $('colL').hidden || $('colR').hidden ? 'minmax(0,1fr)' : '';
+  store.set('tab', t);
+}
+document.querySelectorAll('nav#tabs button').forEach(b => b.onclick = () => showTab(b.dataset.t));
+showTab(store.get('tab') || 'overview');
+
+// ---- Telegram ----
+const tgCfg = store.get('tg') || {};
+['tgToken', 'tgChat'].forEach(k => { if (tgCfg[k] != null) $(k).value = tgCfg[k]; });
+['tgOn', 'tgSig', 'tgPaper', 'tgCal', 'tgWhale'].forEach(k => { if (tgCfg[k] != null) $(k).checked = tgCfg[k]; });
+const tgSave = () => store.set('tg', Object.fromEntries(['tgToken', 'tgChat', 'tgOn', 'tgSig', 'tgPaper', 'tgCal', 'tgWhale'].map(k => [k, $(k).type === 'checkbox' ? $(k).checked : $(k).value.trim()])));
+['tgToken', 'tgChat', 'tgOn', 'tgSig', 'tgPaper', 'tgCal', 'tgWhale'].forEach(k => $(k).onchange = tgSave);
+let tgQ = Promise.resolve();
+function tgRaw(text) {
+  const tok = $('tgToken').value.trim(), chat = $('tgChat').value.trim();
+  if (!tok || !chat) { $('tgNote').textContent = 'ใส่ Bot token และ Chat ID ก่อน'; return; }
+  tgQ = tgQ.then(() => fetch(`https://api.telegram.org/bot${tok}/sendMessage?chat_id=${encodeURIComponent(chat)}&text=${encodeURIComponent('Crypto Signal Lab\n' + text)}`)
+    .then(r => r.json()).then(j => { $('tgNote').textContent = j.ok ? `ส่งล่าสุดสำเร็จ ${new Date().toLocaleTimeString('th-TH')}` : 'Telegram ตอบกลับ: ' + j.description; })
+    .catch(e => { $('tgNote').textContent = 'ส่ง Telegram ไม่ได้: ' + e.message; })
+    .then(() => new Promise(r => setTimeout(r, 1100))));
+}
+function tgSend(text, kind) {
+  const flag = { sig: 'tgSig', paper: 'tgPaper', cal: 'tgCal', whale: 'tgWhale' }[kind];
+  if ($('tgOn').checked && (!flag || $(flag).checked)) tgRaw(text);
+}
+$('tgTest').onclick = () => tgRaw('ข้อความทดสอบ: เชื่อมต่อสำเร็จ');
+$('tgFind').onclick = async () => {
+  const tok = $('tgToken').value.trim(); if (!tok) { $('tgNote').textContent = 'ใส่ Bot token ก่อน'; return; }
+  try {
+    const j = await (await fetch(`https://api.telegram.org/bot${tok}/getUpdates`)).json();
+    const m = (j.result || []).map(u => u.message || u.channel_post).filter(Boolean).pop();
+    if (m) { $('tgChat').value = m.chat.id; tgSave(); $('tgNote').textContent = `พบ Chat ID ของ ${m.chat.title || m.chat.first_name || ''} แล้ว กด "ส่งข้อความทดสอบ" ได้เลย`; }
+    else $('tgNote').textContent = j.ok ? 'ยังไม่พบข้อความ ส่งข้อความหาบอทก่อนแล้วลองใหม่' : 'Telegram ตอบกลับ: ' + j.description;
+  } catch (e) { $('tgNote').textContent = 'เชื่อมต่อ Telegram ไม่ได้: ' + e.message; }
+};
+
+// ---- Diagnostics ----
+function renderDiag() {
+  const rows = Object.entries(DIAG).sort().map(([h, d]) => {
+    const bad = d.errAt && (!d.lastOk || d.errAt > d.lastOk);
+    return `<tr><td>${SRC_NAME[h] || h}</td><td>${bad ? '<span class="r">มีปัญหา</span>' : '<span class="g">ปกติ</span>'}</td><td class="num">${d.ok} / ${d.fail}</td><td class="num">${d.lastOk ? new Date(d.lastOk).toLocaleTimeString('th-TH') : '–'}</td><td class="m" style="text-align:left">${bad ? (d.lastErr || '').replace(/[<>&]/g, '') : ''}</td></tr>`;
+  });
+  $('diag').innerHTML = '<tr><th>แหล่งข้อมูล</th><th>สถานะ</th><th>สำเร็จ / ล้มเหลว</th><th>สำเร็จล่าสุด</th><th style="text-align:left">ข้อผิดพลาดล่าสุด</th></tr>' + (rows.join('') || '<tr><td class="m">ยังไม่มีการเชื่อมต่อ</td></tr>');
+}
+setInterval(renderDiag, 5000);
+
+// ---- Decision summary ----
+function renderDecision() {
+  if (!cs.length || !ind) return;
+  const now = Date.now(), fresh = lastLs && lastLs.status === 'open' && lastLs.ago <= 1 ? lastLs : null;
+  const dir = fresh ? fresh.sig.dir : liveSig ? liveSig.dir : null;
+  const ev = calendar.find(e => e.t - now <= 120 * 60000 && e.t - now >= -30 * 60000), tfOk = ['4h', '1d', '1w'].includes(tf);
+  const wv = Whale.spotVote(Whale.sum(wbook, sym, now, 3600e3)), nsc = news.filter(n => now - n.t < 864e5).reduce((a, n) => a + n.s, 0);
+  const fd = Object.keys(fngMap).sort(), fv = fngMap[fd[fd.length - 1]], items = [];
+  const add = (ok, text, hard) => items.push({ ok, text, hard });
+  add(!ev, ev ? `มีข่าวแรง "${ev.title}" ใกล้ประกาศ (ราคาอาจกระชาก)` : 'ไม่มีข่าวแรงภายใน 2 ชม.', true);
+  if (btStat && btStat.n < 30) add(btStat.avgR > 0, `Backtest เหรียญนี้: ${fmt(btStat.avgR, 2)}R/ไม้ จาก ${btStat.n} เทรด (ข้อมูลน้อย ควรเพิ่มจำนวนแท่งเป็น 10000+)`, false);
+  else add(!!btStat && btStat.avgR > 0, btStat ? `Backtest เหรียญนี้ด้วยค่าตั้งปัจจุบัน: ${fmt(btStat.avgR, 2)}R/ไม้ จาก ${btStat.n} เทรด` : 'ยังไม่มีผล backtest', true);
+  add(tfOk, tfOk ? `Timeframe ${tf} (ผ่านการทดสอบย้อนหลัง)` : `Timeframe ${tf} เล็กเกินไป (ทดสอบแล้วขาดทุนเพราะต้นทุน)`, false);
+  if (dir) {
+    add(true, `สัญญาณ ${dir === 1 ? 'Long' : 'Short'} ผ่านตัวกรองที่เปิดไว้ทั้งหมด`, true);
+    add(liveScore != null && liveScore * dir >= 20, `คะแนนรวม ${fmt(liveScore, 0)} ${liveScore * dir >= 20 ? 'หนุนทิศนี้' : 'ไม่หนุน'}`, false);
+    add(wv == null || wv !== -dir, wv == null ? 'วาฬ 1 ชม.: ไม่มีไม้ใหญ่' : `วาฬ 1 ชม.: ${wv === dir ? 'ไปทางเดียวกัน' : wv === 0 ? 'สมดุล' : 'สวนทาง'}`, false);
+    add(fut?.vote == null || fut.vote !== -dir, fut?.vote == null ? 'รายใหญ่ Futures: ไม่มีข้อมูล' : `รายใหญ่ Futures: ${fut.vote === dir ? 'ไปทางเดียวกัน' : fut.vote === 0 ? 'ทรงตัว' : 'สวนทาง'}`, false);
+    add(nsc * dir >= 0, `อารมณ์ข่าว 24 ชม.: ${nsc > 0 ? '+' : ''}${nsc}`, false);
+    add(fv == null || (dir === 1 ? fv < 75 : fv > 25), `Fear & Greed ${fv ?? '–'}${fv != null && (dir === 1 ? fv >= 75 : fv <= 25) ? ' (สุดขีด ระวังกลับตัว)' : ''}`, false);
+  }
+  const hardFail = items.some(x => x.hard && !x.ok), soft = items.filter(x => !x.hard), softOk = soft.filter(x => x.ok).length;
+  const lv = (x, pre = '') => [[pre + 'จุดเข้า', fmt(x.entry)], ['SL', `<span class="r">${fmt(x.sl)}</span> ${distPct(x, x.sl)}`], ['TP', `<span class="g">${fmt(x.tp)}</span> ${distPct(x, x.tp)}`]];
+  let title, kv = [];
+  if (fresh) {
+    title = hardFail ? `<span class="r">ไม่แนะนำให้เข้า</span> ${dirTxt(dir)}` : `<span class="g">เข้าได้</span> ${dirTxt(dir)} <small class="m" style="font-size:14px">มั่นใจ ${softOk}/${soft.length}</small>`;
+    kv = lv(fresh.sig);
+  } else if (liveSig) {
+    title = `<span class="m">เตรียมตัว</span> ${dirTxt(dir)} <small class="m" style="font-size:14px">รอแท่งปิดยืนยัน</small>`;
+    kv = lv(liveSig, 'ถ้าปิดตอนนี้: ');
+  } else {
+    title = '<span class="m">รอจังหวะ</span>';
+    const px = cs[cs.length - 1].close;
+    for (const [x, d, name] of [[lastPl?.long, 1, 'รอ Long'], [lastPl?.short, -1, 'รอ Short']]) {
+      if (!x || x.entry == null) continue;
+      kv.push([name, x.allowed ? (x.trigger != null ? `ปิด${d === 1 ? 'เหนือ' : 'ใต้'} ${fmt(x.trigger)} <span class="m">(${fmt((x.trigger - px) / px * 100, 2)}%)</span>` : 'รอสัญญาณ') : `<span class="m">ตัวกรองปิด (${x.blocked.join(', ')})</span>`]);
+    }
+    if (lastLs && lastLs.status === 'open') kv.push(['สัญญาณก่อนหน้า', `${dirTxt(lastLs.sig.dir)} ยังถืออยู่ (${fmt(lastLs.r, 2)}R) · SL ${fmt(lastLs.sig.sl)} · TP ${fmt(lastLs.sig.tp)}`]);
+  }
+  $('decTitle').innerHTML = title;
+  $('decKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num" style="white-space:normal">${v}</span>`).join('');
+  $('decList').innerHTML = items.map(x => `<div class="${x.ok ? 'g' : 'r'}">${x.ok ? '✓' : '✗'} ${x.text}${x.hard ? ' *' : ''}</div>`).join('');
+}
+
+// ---- Paper portfolio (multi-coin, real prices, decided at bar close) ----
+$('ppSyms').value = $('pfSyms').value;
+let pp = null, ppBusy = false;
+const ppChart = LC.createChart($('ppChart'), { ...opts }), ppLine = ppChart.addLineSeries({ color: '#f0b90b', lineWidth: 2 });
+function ppSave() {
+  if (!pp) { store.set('pp', null); return; }
+  const slots = Object.fromEntries(Object.entries(pp.pf.slots).map(([k, x]) => [k, { pos: x.pos, pending: x.pending, lastClose: x.lastClose, lastTime: x.lastTime }]));
+  store.set('pp', { cfg: pp.cfg, on: pp.on, expect: pp.expect, start: pp.pf.start, equity: pp.pf.equity, trades: pp.pf.trades, curve: pp.pf.curve.slice(-3000), lastTime: pp.pf.lastTime, slots });
+}
+(function ppRestore() {
+  const d = store.get('pp'); if (!d) return;
+  const pf = Core.newPortfolio(d.start, d.cfg.syms);
+  Object.assign(pf, { equity: d.equity, trades: d.trades, curve: d.curve, lastTime: d.lastTime });
+  for (const [k, v] of Object.entries(d.slots || {})) if (pf.slots[k]) Object.assign(pf.slots[k], v);
+  pp = { cfg: d.cfg, on: d.on, expect: d.expect, pf, prices: {} };
+  $('ppSyms').value = d.cfg.syms.join(','); $('ppMax').value = d.cfg.maxPos; $('ppBal').value = d.start;
+})();
+async function ppLoad(syms, t, p) {
+  const sets = [];
+  for (const s of syms) {
+    try { const c = await fetchKlines(s, t, 1000), I = Core.indicators(c, p); I.ext = buildExt(c, t, s); sets.push({ sym: s, cs: c, ind: I }); }
+    catch (e) { console.warn('paper', s, e.message); }
+  }
+  return sets;
+}
+$('ppStart').onclick = async () => {
+  if (ppBusy) return;
+  const syms = $('ppSyms').value.split(/[\s,]+/).map(x => x.trim().toUpperCase()).filter(Boolean), maxPos = Math.max(1, +$('ppMax').value || 3), bal = +$('ppBal').value || 1000;
+  ppBusy = true; $('ppStatus').textContent = 'กำลังโหลดข้อมูลและคำนวณผลที่คาดหวังจาก backtest...';
+  const p = { ...P }, sets = await ppLoad(syms, tf, p);
+  ppBusy = false;
+  if (!sets.length) { $('ppStatus').textContent = 'โหลดข้อมูลไม่ได้'; return; }
+  const bt = Core.portfolioBacktest(sets, p, maxPos), rs = bt.trades.map(x => x.r), m = rs.reduce((a, x) => a + x, 0) / (rs.length || 1);
+  const sd = Math.sqrt(rs.reduce((a, x) => a + (x - m) ** 2, 0) / Math.max(1, rs.length - 1));
+  const pf = Core.newPortfolio(bal, sets.map(x => x.sym));
+  pf.lastTime = Math.max(...sets.map(x => x.cs[x.cs.length - 2].time)); // start fresh: only future bars
+  pp = { cfg: { syms: sets.map(x => x.sym), maxPos, tf, p }, on: true, expect: { avgR: m, sd, win: Core.stats(bt).win, n: rs.length }, pf, prices: {} };
+  ppSave(); renderPaperPf(); ppTick();
+};
+$('ppStop').onclick = () => { if (pp) { pp.on = !pp.on; ppSave(); renderPaperPf(); } };
+async function ppTick() {
+  if (!pp || !pp.on || ppBusy) return;
+  ppBusy = true;
+  try {
+    const { syms, maxPos, tf: t, p } = pp.cfg, sets = await ppLoad(syms, t, p), pf = pp.pf;
+    sets.forEach(x => pp.prices[x.sym] = x.cs[x.cs.length - 1].close);
+    const byTime = new Map();
+    for (const x of sets) for (let i = 1; i <= x.cs.length - 2; i++) {
+      const tt = x.cs[i].time; if (tt <= pf.lastTime) continue;
+      if (!byTime.has(tt)) byTime.set(tt, []);
+      byTime.get(tt).push({ slot: pf.slots[x.sym], cs: x.cs, ind: x.ind, i });
+    }
+    const before = { n: pf.trades.length, open: Object.entries(pf.slots).filter(([, s]) => s.pos).map(([k]) => k) };
+    for (const tt of [...byTime.keys()].sort((a, b) => a - b)) Core.portfolioStep(pf, byTime.get(tt), p, maxPos);
+    pf.trades.slice(before.n).forEach(x => notify(`Paper พอร์ต ปิด ${x.sym} ${x.dir === 1 ? 'LONG' : 'SHORT'} (${x.reason}) ${x.r >= 0 ? '+' : ''}${fmt(x.r, 2)}R`, x.r >= 0 ? 1 : -1, 'paper'));
+    Object.entries(pf.slots).filter(([k, s]) => s.pos && !before.open.includes(k)).forEach(([k, s]) => notify(`Paper พอร์ต เปิด ${k} ${s.pos.dir === 1 ? 'LONG' : 'SHORT'} @ ${fmt(s.pos.entry)} · SL ${fmt(s.pos.sl)} · TP ${fmt(s.pos.tp)}`, s.pos.dir, 'paper'));
+    ppSave();
+    $('ppStatus').textContent = `อัปเดตล่าสุด ${new Date().toLocaleTimeString('th-TH')} · ${sets.length}/${syms.length} เหรียญ`;
+  } catch (e) { $('ppStatus').textContent = 'อัปเดตไม่สำเร็จ: ' + e.message; }
+  ppBusy = false;
+  renderPaperPf();
+}
+setInterval(ppTick, 60000);
+function renderPaperPf() {
+  if (!pp) { $('ppStats').innerHTML = ''; $('ppPos').innerHTML = '<tr><td class="m">ยังไม่ได้เริ่ม · ตั้งเหรียญแล้วกด "เริ่มใหม่"</td></tr>'; return; }
+  const pf = pp.pf, s = Core.stats({ ...pf, curve: pf.curve.length ? pf.curve : [{ time: 0, value: pf.start }] }), e = pp.expect, p = pp.cfg.p;
+  let open = 0;
+  const pos = Object.entries(pf.slots).filter(([, x]) => x.pos).map(([k, x]) => {
+    const px = pp.prices[k] ?? x.lastClose, u = Core.unreal(x, px, Date.now() / 1000, p); open += u;
+    return `<tr><td>${k.replace('USDT', '')}</td><td>${dirTxt(x.pos.dir)}</td><td class="num">${fmt(x.pos.entry)}</td><td class="num r">${fmt(x.pos.sl)}</td><td class="num g">${isFinite(x.pos.tp) ? fmt(x.pos.tp) : 'trailing'}</td><td class="num">${fmt(px)}</td><td class="num ${u >= 0 ? 'g' : 'r'}">${fmt(u / x.pos.riskAmt, 2)}R</td></tr>`;
+  });
+  $('ppStats').innerHTML = [['สถานะ', pp.on ? '<span class="g">ทำงาน</span>' : '<span class="m">หยุด</span>'], ['เงินทุน (รวมลอย)', fmt(pf.equity + open, 2)], ['กำไร/ขาดทุน', `<span class="${pf.equity + open >= pf.start ? 'g' : 'r'}">${fmt((pf.equity + open - pf.start) / pf.start * 100, 2)}%</span>`],
+    ['เทรดที่ปิดแล้ว', s.n], ['Win rate', s.n ? fmt(s.win, 1) + '%' : '–'], ['เฉลี่ย R จริง / คาด', `${s.n ? fmt(s.avgR, 2) : '–'} / ${fmt(e.avgR, 2)}`]].map(([k, v]) => `<div><small>${k}</small><b class="num">${v}</b></div>`).join('');
+  let chk;
+  if (s.n < 20) chk = `<div class="note">เทียบกับ backtest (คาด ${fmt(e.avgR, 2)}R/ไม้ จาก ${e.n} เทรด): ต้องมีอย่างน้อย 20 เทรดก่อนจึงจะสรุปได้ (ตอนนี้ ${s.n})</div>`;
+  else {
+    const z = (s.avgR - e.avgR) / (e.sd / Math.sqrt(s.n));
+    chk = z < -2 ? `<div class="note r">เตือน: ผลจริงแย่กว่า backtest อย่างมีนัยสำคัญ (z = ${fmt(z, 2)}) ระบบอาจใช้ไม่ได้กับตลาดตอนนี้ ควรหยุดและทบทวน</div>`
+      : `<div class="note g">ผลจริงอยู่ในช่วงที่ backtest คาดไว้ (z = ${fmt(z, 2)})</div>`;
+  }
+  $('ppCheck').innerHTML = chk + `<div class="note">ตั้งค่าที่ใช้: ${Core.STRATS[p.strategy].name} · ${pp.cfg.tf} · SL ${p.slAtr}×ATR · TP ${p.tpR}R · ออก: ${p.exitMode || 'fixed'} · ถือพร้อมกัน ${pp.cfg.maxPos}</div>`;
+  $('ppPos').innerHTML = pos.length ? '<tr><th>เหรียญ</th><th>ฝั่ง</th><th>เข้า</th><th>SL</th><th>TP</th><th>ราคาตอนนี้</th><th>ลอย</th></tr>' + pos.join('') : '<tr><td class="m">ยังไม่มีสถานะ</td></tr>';
+  $('ppTrades').innerHTML = pf.trades.length ? '<tr><th>เหรียญ</th><th>ฝั่ง</th><th>เข้า</th><th>ออก</th><th>เหตุผล</th><th>R</th><th>P/L</th></tr>' + pf.trades.slice().reverse().map(x =>
+    `<tr><td>${x.sym.replace('USDT', '')}</td><td>${dirTxt(x.dir)}</td><td class="num">${fmt(x.entry)}</td><td class="num">${fmt(x.exit)}</td><td>${x.reason}</td><td class="num">${fmt(x.r, 2)}</td><td class="num ${x.pnl >= 0 ? 'g' : 'r'}">${fmt(x.pnl, 2)}</td></tr>`).join('') : '<tr><td class="m">ยังไม่มีเทรดที่ปิด</td></tr>';
+  if (pf.curve.length) ppLine.setData(pf.curve.map(c => ({ time: c.time + TZ, value: c.value })));
+}
+$('ppCsv').onclick = () => {
+  if (!pp || !pp.pf.trades.length) { $('ppStatus').textContent = 'ยังไม่มีเทรดให้ export'; return; }
+  const rows = [['symbol', 'side', 'entry_time', 'entry', 'sl', 'tp', 'exit_time', 'exit', 'reason', 'pnl_usdt', 'r']].concat(pp.pf.trades.map(x =>
+    [x.sym, x.dir === 1 ? 'LONG' : 'SHORT', new Date(x.time * 1000).toISOString(), x.entry, x.sl, x.tp, new Date(x.exitTime * 1000).toISOString(), x.exit, x.reason, x.pnl.toFixed(4), x.r.toFixed(4)]));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + rows.map(r => r.join(',')).join('\n')], { type: 'text/csv' }));
+  a.download = `paper-portfolio-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+};
+renderPaperPf();
+setTimeout(ppTick, 5000);
+
 // ---- Paper trading ----
 const pKey = () => `paper:${sym}:${tf}`;
 function loadPaper() {
@@ -725,6 +1019,7 @@ $('sym').onkeydown = e => { if (e.key === 'Enter') load(); };
 loadMacro(); loadCalendar(); loadNews();
 ['a_sound', 'a_notify', 'a_forming'].forEach(k => $(k).onchange = saveSettings);
 FKEYS.forEach(k => $(k).onchange = applyParams);
+['p_exitMode', 'p_limit'].forEach(k => $(k).onchange = applyParams);
 load();
 }
 </script>
