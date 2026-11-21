@@ -94,5 +94,38 @@ test('whale: merge, sums, walls, futures summary', () => {
   assert.strictEqual(w.bids[0].usd, 9800);
   assert.strictEqual(W.futuresSummary({ top: [{ longAccount: '0.5' }, { longAccount: '0.53' }] }).vote, 1);
 });
+test('vol sizing: high volatility → smaller position', () => {
+  const st1 = C.newState(1000), st2 = C.newState(1000), p = { ...Z, lev: 100 };
+  C.openPos(st1, { dir: 1, entry: 100, sl: 95, tp: 110, volMult: 1 }, 0, p, 't');
+  C.openPos(st2, { dir: 1, entry: 100, sl: 95, tp: 110, volMult: 0.5 }, 0, p, 't');
+  near(st2.pos.qty, st1.pos.qty / 2);
+});
+test('strategy2 adds signals (OR) and never removes them', () => {
+  const cs = F.candles(), ind = C.indicators(cs, F.P), p = { ...F.P, strategy: 'breakout' };
+  let a = 0, b = 0;
+  for (let i = 1; i < cs.length - 1; i++) { if (C.signalAt(cs, ind, i, p)) a++; if (C.signalAt(cs, ind, i, { ...p, strategy2: 'ema' })) b++; }
+  assert.ok(b >= a && b > 0);
+});
+test('daily loss stop blocks new entries after the limit', () => {
+  const st = C.newState(1000), p = { dailyLoss: 3 };
+  assert.ok(C.dayGuard(st, 86400 * 10 + 10, p)); st.equity = 960;
+  assert.ok(!C.dayGuard(st, 86400 * 10 + 500, p)); assert.ok(C.dayGuard(st, 86400 * 11 + 1, p));
+});
+test('portfolio: maxSameDir and eligibility respected', () => {
+  const sets = [3, 5, 7, 9, 11].map((seed, k) => { const cs = F.candles(1500, seed); return { sym: 'S' + k, cs, ind: C.indicators(cs, F.P) }; });
+  const p = { ...F.P, strategy: 'breakout', slAtr: 3, tpR: 3 }, pf = C.newPortfolio(1000, sets.map(s => s.sym));
+  const opts = { maxSameDir: 1, eligible: s => s !== 'S4' };
+  for (let i = 1; i < 1499; i++) {
+    C.portfolioStep(pf, sets.map(s => ({ slot: pf.slots[s.sym], cs: s.cs, ind: s.ind, i })), p, 4, opts);
+    for (const d of [1, -1]) assert.ok(Object.values(pf.slots).filter(s => s.pos && s.pos.dir === d).length <= 1);
+  }
+  assert.ok(!pf.trades.some(t => t.sym === 'S4'));
+});
+test('dynamic universe picks top volume per month', () => {
+  const mk = (sym, v) => ({ sym, cs: Array.from({ length: 2000 }, (_, i) => ({ time: 1.7e9 + i * 14400, close: 1, volume: v, qv: v })) });
+  const u = C.dynamicUniverse([mk('A', 10), mk('B', 5), mk('C', 1)], 2);
+  const t = 1.7e9 + 1500 * 14400;
+  assert.ok(u('A', t) && u('B', t) && !u('C', t));
+});
 console.log(`tests: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
