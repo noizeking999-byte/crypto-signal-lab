@@ -199,6 +199,7 @@ const Core = (() => {
     };
     ind.st = supertrend(h, l, c, atr(h, l, c, 10), 3);
     ind.obv = obv(c, v); ind.obvE = ema(ind.obv, 20);
+    ind.htf = ema(c, 800); // ≈ EMA200 of a 4x higher timeframe
     ind.score = cs.map((_, i) => score(votes(cs, ind, i, p)));
     return ind;
   }
@@ -273,10 +274,10 @@ const Core = (() => {
 
   // Trading styles: short-term to long-term presets
   const STYLES = {
-    scalp: { name: 'Scalp (สั้นมาก)', tf: '5m', slAtr: 1.0, tpR: 1.5 },
-    day: { name: 'Day trade (สั้น)', tf: '15m', slAtr: 1.5, tpR: 2 },
-    swing: { name: 'Swing (กลาง)', tf: '4h', slAtr: 2.0, tpR: 2.5 },
-    position: { name: 'Position (ยาว)', tf: '1d', slAtr: 2.5, tpR: 3 }
+    scalp: { name: 'Scalp (สั้นมาก)', tf: '5m', slAtr: 3, tpR: 1.5 },
+    day: { name: 'Day trade (สั้น)', tf: '15m', slAtr: 3, tpR: 2 },
+    swing: { name: 'Swing (กลาง) แนะนำ', tf: '4h', slAtr: 3, tpR: 3 },
+    position: { name: 'Position (ยาว)', tf: '1d', slAtr: 3, tpR: 3 }
   };
 
   // SL distance = ATR × slAtr, but never below minSl % of price, and wide enough that
@@ -289,10 +290,49 @@ const Core = (() => {
     const risk = Math.max(atrV * p.slAtr, entry * minRiskPct(p) / 100);
     return { dir, entry, sl: entry - dir * risk, tp: entry + dir * risk * p.tpR };
   }
+  // ---------- Entry filters (validated in tools/results2.md) ----------
+  // ext (optional, aligned to bars): dxy/gold/oil = {val, sma} daily (previous day), fng = daily value, btcUp = bool
+  function trendOk(d, s, i, sign) {
+    if (!s || s.val[i] == null || s.sma[i] == null) return true; // no data → don't block
+    const up = s.val[i] > s.sma[i];
+    return d === 1 ? up === (sign === 1) : up !== (sign === 1);
+  }
+  const FILTERS = {
+    fDxy: { name: 'ดอลลาร์ (DXY): Long เมื่อดอลลาร์อ่อน / Short เมื่อแข็ง', fn: (d, cs, I, i) => trendOk(d, I.ext?.dxy, i, -1) },
+    fGold: { name: 'ทองคำ: Long เมื่อทองขาขึ้น / Short เมื่อขาลง', fn: (d, cs, I, i) => trendOk(d, I.ext?.gold, i, 1) },
+    fOil: { name: 'น้ำมัน: Long เมื่อน้ำมันขาขึ้น / Short เมื่อขาลง', fn: (d, cs, I, i) => trendOk(d, I.ext?.oil, i, 1) },
+    fFng: { name: 'Fear & Greed: ไม่ Long ตอนโลภสุด (≥75) / ไม่ Short ตอนกลัวสุด (≤25)', fn: (d, cs, I, i) => { const f = I.ext?.fng?.[i]; return f == null || (d === 1 ? f < 75 : f > 25); } },
+    fBtc: { name: 'เทรนด์ BTC: Long altcoin เมื่อ BTC เหนือ EMA200', fn: (d, cs, I, i) => { const b = I.ext?.btcUp?.[i]; return b == null || (d === 1 ? b : !b); } },
+    fAdx: { name: 'ADX ≥ 25 + เทรนด์ใหญ่ (EMA800)', fn: (d, cs, I, i) => I.adx.adx[i] >= 25 && I.htf[i] != null && (d === 1 ? cs[i].close > I.htf[i] : cs[i].close < I.htf[i]) }
+  };
+  const passFilters = (d, cs, I, i, p) => Object.keys(FILTERS).every(k => !p[k] || FILTERS[k].fn(d, cs, I, i));
   function signalAt(cs, ind, i, p) {
     if (i < 1 || !ok(ind.atr[i])) return null;
     const d = (STRATS[p.strategy] || STRATS.confluence).fn(cs, ind, i, p);
-    return d ? levels(d, cs[i].close, ind.atr[i], p) : null;
+    return d && passFilters(d, cs, ind, i, p) ? levels(d, cs[i].close, ind.atr[i], p) : null;
+  }
+  // Align daily map {YYYY-MM-DD: close} to bars using the PREVIOUS day (no look-ahead)
+  function alignDaily(cs, map) {
+    const days = Object.keys(map).sort(), out = new Array(cs.length).fill(null);
+    let j = -1;
+    for (let i = 0; i < cs.length; i++) {
+      const today = new Date(cs[i].time * 1000).toISOString().slice(0, 10);
+      while (j + 1 < days.length && days[j + 1] < today) j++;
+      out[i] = j >= 0 ? map[days[j]] : null;
+    }
+    return out;
+  }
+  function alignDailyTrend(cs, map, n = 50) {
+    const days = Object.keys(map).sort(), m = sma(days.map(d => map[d]), n), sm = {};
+    days.forEach((d, k) => { if (m[k] != null) sm[d] = m[k]; });
+    return { val: alignDaily(cs, map), sma: alignDaily(cs, sm) };
+  }
+  // Last value at or before each bar's open time; pts sorted [[timeSec, v]]
+  function alignSeries(cs, pts) {
+    const out = new Array(cs.length).fill(null);
+    let j = -1;
+    for (let i = 0; i < cs.length; i++) { while (j + 1 < pts.length && pts[j + 1][0] <= cs[i].time) j++; out[i] = j >= 0 ? pts[j][1] : null; }
+    return out;
   }
 
   // ---------- Trading engine with costs ----------
@@ -365,15 +405,36 @@ const Core = (() => {
     return {
       n: t.length, win: t.length ? wins.length / t.length * 100 : 0,
       net: (st.equity - st.start) / st.start * 100, pf: gl > 0 ? gw / gl : (gw > 0 ? Infinity : 0),
-      dd: dd * 100, avgR: t.length ? t.reduce((a, x) => a + x.r, 0) / t.length : 0
+      dd: dd * 100, avgR: t.length ? t.reduce((a, x) => a + x.r, 0) / t.length : 0,
+      // win rate needed to break even given the actual average win / loss (in R)
+      beWin: (() => { const W = wins.map(x => x.r), L = t.filter(x => x.pnl <= 0).map(x => -x.r);
+        if (!W.length || !L.length) return null; const aw = W.reduce((a, x) => a + x, 0) / W.length, al = L.reduce((a, x) => a + x, 0) / L.length; return al / (aw + al) * 100; })()
     };
+  }
+  function backtestRange(cs, ind, p, from, to) {
+    const st = newState(p.bal);
+    for (let i = from; i <= to; i++) step(st, cs, ind, i, p);
+    return st;
+  }
+  // Pick best SL/TP on first `split` of data, test on the rest
+  function walkForward(cs, ind, p, lastClosed, split = 0.6) {
+    const cut = Math.floor(lastClosed * split), grid = [];
+    for (const sl of [1, 1.5, 2, 3]) for (const tp of [1, 1.5, 2, 3]) {
+      const q = { ...p, slAtr: sl, tpR: tp }, tr = stats(backtestRange(cs, ind, q, 1, cut));
+      grid.push({ sl, tp, train: tr });
+    }
+    const cand = grid.filter(g => g.train.n >= 10).sort((a, b) => b.train.avgR - a.train.avgR);
+    const best = cand[0] || null;
+    const test = best ? stats(backtestRange(cs, ind, { ...p, slAtr: best.sl, tpR: best.tp }, cut + 1, lastClosed)) : null;
+    const cur = stats(backtestRange(cs, ind, p, cut + 1, lastClosed));
+    return { cut, best, test, cur, grid };
   }
   function compareAll(cs, ind, p, lastClosed) {
     return Object.keys(STRATS).map(k => ({ key: k, name: STRATS[k].name, ...stats(backtest(cs, ind, { ...p, strategy: k }, lastClosed)) }));
   }
 
   return { sma, ema, rma, rsi, atr, macd, bollinger, stoch, adx, supertrend, ichimoku, psar, cci, willr, mfi, obv, vwap, donchian,
-    VOTE_NAMES, STRATS, STYLES, indicators, votes, score, minRiskPct, levels, signalAt,
+    VOTE_NAMES, STRATS, STYLES, FILTERS, passFilters, alignDaily, alignDailyTrend, alignSeries, indicators, votes, score, minRiskPct, levels, signalAt, backtestRange, walkForward,
     newState, openPos, closePos, checkBar, checkPrice, unreal, step, backtest, stats, compareAll };
 })();
 if (typeof module !== 'undefined') module.exports = Core;
