@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Crypto Signal Lab</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0e1116;--panel:#161b22;--line:#2a313c;--ink:#e6edf3;--mute:#8b96a5;--up:#26a69a;--dn:#ef5350;--acc:#f0b90b}
@@ -18,29 +17,36 @@ input{width:110px}button{cursor:pointer}button:hover{border-color:var(--mute)}
 button.pri{background:var(--acc);color:#111;border-color:var(--acc);font-weight:600}
 button.up{background:var(--up);border-color:var(--up);color:#fff}button.dn{background:var(--dn);border-color:var(--dn);color:#fff}
 #status{color:var(--mute);font-size:13px;margin-left:auto}
-main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px;padding:12px 16px}
-@media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;padding:12px 16px}
+@media(max-width:1000px){main{grid-template-columns:minmax(0,1fr)}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
-#chart{height:480px}#eqchart{height:160px}
-.sig{font-size:28px;font-weight:600;margin:2px 0 8px}
+#chart{height:480px}#eqchart{height:150px}
+.sig{font-size:26px;font-weight:600;margin:2px 0 8px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px}.kv span:nth-child(odd){color:var(--mute)}.kv span:nth-child(even){text-align:right}
 h2{font-size:15px;margin:0 0 10px;color:var(--mute);font-weight:600}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px}
 .stats div{background:var(--bg);border-radius:6px;padding:8px}.stats b{display:block;font-size:18px}.stats small{color:var(--mute)}
 table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:right}th{color:var(--mute);font-weight:400}td:first-child,th:first-child{text-align:left}
-.scroll{max-height:320px;overflow:auto}
+tr.sel td{background:#1f2630}tr.click{cursor:pointer}tr.click:hover td{background:#1b212a}
+.scroll{max-height:300px;overflow:auto}
 .g{color:var(--up)}.r{color:var(--dn)}.m{color:var(--mute)}
 .row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
-details label{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0}details input{width:90px}
+details label{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0}details input{width:90px}details select{max-width:200px}
 .note{font-size:12px;color:var(--mute);margin-top:8px}
 .col{display:grid;gap:12px;align-content:start}
+.gauge{position:relative;height:12px;background:var(--bg);border-radius:6px;margin:6px 0 10px;overflow:hidden}
+.gauge i{position:absolute;top:0;bottom:0}.gauge b{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--mute)}
+.votes{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;font-size:13px;margin-top:8px}.votes div{display:flex;justify-content:space-between}
+.log{font-size:12px;max-height:140px;overflow:auto;margin-top:8px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}@media(max-width:700px){.two{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
 <header>
   <h1>Crypto Signal Lab</h1>
   <input id="sym" value="BTCUSDT" aria-label="คู่เหรียญ">
-  <select id="tf" aria-label="Timeframe"><option>5m</option><option>15m</option><option selected>1h</option><option>4h</option><option>1d</option></select>
+  <select id="style" aria-label="สไตล์การเทรด"></select>
+  <select id="tf" aria-label="Timeframe"><option>1m</option><option>5m</option><option>15m</option><option>30m</option><option selected>1h</option><option>4h</option><option>1d</option><option>1w</option></select>
   <select id="bars" aria-label="จำนวนแท่ง"><option value="1000">1000 แท่ง</option><option value="2000" selected>2000 แท่ง</option><option value="5000">5000 แท่ง</option></select>
   <button class="pri" id="load">โหลด / วิเคราะห์</button>
   <span id="status">ยังไม่ได้โหลดข้อมูล</span>
@@ -49,35 +55,51 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
   <div class="col">
     <div class="card"><div id="chart"></div></div>
     <div class="card">
-      <h2>Backtest (จำลองย้อนหลังบนข้อมูลที่โหลด)</h2>
+      <h2>ภาพรวมทุก Timeframe (เล่นสั้น → เล่นยาว) · อัปเดตทุก 30 วินาที</h2>
+      <div class="scroll"><table id="mtf"><tr><td class="m">กำลังโหลด...</td></tr></table></div>
+      <div class="note">คะแนน = ผลโหวตของ 16 อินดิเคเตอร์ (−100 ขาลงทั้งหมด … +100 ขาขึ้นทั้งหมด) · สัญญาณ = ตามกลยุทธ์ที่เลือก ภายใน 3 แท่งล่าสุด</div>
+    </div>
+    <div class="card">
+      <h2>Backtest (จำลองย้อนหลัง หักค่าธรรมเนียม + slippage + funding แล้ว)</h2>
       <div class="stats" id="btStats"></div>
-      <div id="eqchart"></div>
+      <div class="two">
+        <div><h2>เทียบทุกกลยุทธ์ (คลิกเพื่อเลือกใช้)</h2><table id="cmp"></table></div>
+        <div><h2>กราฟเงินทุน</h2><div id="eqchart"></div></div>
+      </div>
+      <h2 style="margin-top:12px">รายการเทรด</h2>
       <div class="scroll"><table id="btTable"></table></div>
     </div>
   </div>
   <div class="col">
     <div class="card">
-      <h2>สัญญาณล่าสุด (แท่งที่ปิดแล้ว)</h2>
+      <h2>วิเคราะห์ Real-time (แท่งปัจจุบัน)</h2>
+      <div class="sig" id="liveTitle" style="font-size:22px">–</div>
+      <div class="kv"><span>คะแนนรวม</span><span class="num" id="scoreTxt">–</span></div>
+      <div class="gauge"><i id="gaugeFill"></i><b></b></div>
+      <div class="kv" id="liveKv"></div>
+      <div class="votes" id="votes"></div>
+      <div class="note">อัปเดตทุกวินาทีตามราคาจริง · สัญญาณที่กำลังก่อตัวอาจหายไปก่อนแท่งปิด</div>
+    </div>
+    <div class="card">
+      <h2>สัญญาณยืนยันล่าสุด (แท่งที่ปิดแล้ว)</h2>
       <div class="sig" id="sigTitle">–</div>
       <div class="kv" id="sigKv"></div>
-      <div class="note">สัญญาณคิดจากแท่งที่ปิดแล้วเท่านั้น (ไม่ repaint)</div>
+      <h2 style="margin-top:12px">บันทึกสัญญาณ</h2>
+      <div class="log" id="log"><span class="m">ยังไม่มี</span></div>
     </div>
     <div class="card">
-      <h2>วิเคราะห์ Real-time (แท่งปัจจุบัน ยังไม่ปิด)</h2>
-      <div class="sig" id="liveTitle" style="font-size:22px">–</div>
-      <div class="kv" id="liveKv"></div>
-      <div class="note" id="liveNote">อัปเดตทุกครั้งที่ราคาเปลี่ยน (สูงสุดวินาทีละครั้ง) · สัญญาณนี้อาจหายไปก่อนแท่งปิด</div>
-    </div>
-    <div class="card">
-      <h2>Paper Trading (เทรดจำลองกับราคาจริงแบบ real-time)</h2>
+      <h2>Paper Trading (เทรดจำลองกับราคาจริง)</h2>
       <div class="row"><button class="pri" id="ptStart">เริ่ม Auto</button><button id="ptStop">หยุด</button><button id="ptReset">รีเซ็ต</button></div>
       <div class="row"><button class="up" id="mLong">Long</button><button class="dn" id="mShort">Short</button><button id="mClose">ปิดสถานะ</button></div>
       <div class="kv" id="ptKv"></div>
       <div class="scroll"><table id="ptTable"></table></div>
-      <div class="note">Auto = เปิด/ปิดตามสัญญาณเมื่อแท่งปิด, Long/Short = เปิดเองที่ราคาปัจจุบัน (SL/TP ตั้งตาม ATR) · ข้อมูลเก็บในเบราว์เซอร์นี้</div>
+      <div class="note">Auto = เปิด/ปิดตามสัญญาณยืนยัน · Long/Short = เปิดเองที่ราคาปัจจุบัน (SL/TP ตาม ATR)</div>
     </div>
     <div class="card">
-      <details open><summary>ตั้งค่ากลยุทธ์</summary>
+      <details open><summary>ตั้งค่า</summary>
+        <label>กลยุทธ์ <select id="p_strategy"></select></label>
+        <label>Confluence: คะแนนขั้นต่ำ <input type="number" id="p_conf" value="60"></label>
+        <label>ADX ขั้นต่ำ (มีเทรนด์) <input type="number" id="p_adxMin" value="20"></label>
         <label>EMA เร็ว <input type="number" id="p_fast" value="20"></label>
         <label>EMA ช้า <input type="number" id="p_slow" value="50"></label>
         <label>EMA เทรนด์ <input type="number" id="p_trend" value="200"></label>
@@ -88,164 +110,75 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
         <label>เสี่ยงต่อไม้ (%) <input type="number" step="0.1" id="p_risk" value="1"></label>
         <label>เลเวอเรจสูงสุด <input type="number" step="1" id="p_lev" value="1"></label>
         <label>ค่าธรรมเนียม/ข้าง (%) <input type="number" step="0.01" id="p_fee" value="0.1"></label>
+        <label>Slippage/ข้าง (%) <input type="number" step="0.01" id="p_slip" value="0.05"></label>
+        <label>Funding/8ชม. (%) Spot=0 <input type="number" step="0.001" id="p_funding" value="0"></label>
         <label>ทุนเริ่มต้น (USDT) <input type="number" id="p_bal" value="1000"></label>
         <label>เปิด Short ได้ <input type="checkbox" id="p_shorts" checked style="width:auto"></label>
         <label>ออกเมื่อสัญญาณกลับตัว <input type="checkbox" id="p_exitOpp" checked style="width:auto"></label>
+        <label>เสียงแจ้งเตือน <input type="checkbox" id="a_sound" checked style="width:auto"></label>
+        <label>แจ้งเตือน Windows <input type="checkbox" id="a_notify" checked style="width:auto"></label>
+        <label>แจ้งตอนสัญญาณกำลังก่อตัว <input type="checkbox" id="a_forming" style="width:auto"></label>
         <button id="apply" style="width:100%">ใช้ค่าใหม่ + คำนวณใหม่</button>
       </details>
-      <div class="note">กลยุทธ์: ราคาเหนือ EMA เทรนด์ + EMA เร็วตัดขึ้น EMA ช้า + RSI&gt;50 → Long (กลับด้านสำหรับ Short) · เครื่องมือทดสอบระบบ ไม่ใช่คำแนะนำการลงทุน</div>
+      <div class="note">เครื่องมือทดสอบระบบ ไม่ใช่คำแนะนำการลงทุน · ผลย้อนหลังไม่รับประกันอนาคต</div>
     </div>
   </div>
 </main>
 
 <script src="lw.js"></script>
-
-<!-- Core: pure logic (no DOM) -->
-<script id="core">
-const Core = (() => {
-  function ema(src, n) {
-    const out = new Array(src.length).fill(null), k = 2 / (n + 1);
-    let prev = null, sum = 0;
-    for (let i = 0; i < src.length; i++) {
-      if (i < n - 1) { sum += src[i]; continue; }
-      if (i === n - 1) { sum += src[i]; prev = sum / n; } else prev = src[i] * k + prev * (1 - k);
-      out[i] = prev;
-    }
-    return out;
-  }
-  function rsi(c, n) {
-    const out = new Array(c.length).fill(null);
-    let g = 0, l = 0;
-    const calc = () => (l === 0 ? 100 : 100 - 100 / (1 + g / l));
-    for (let i = 1; i < c.length; i++) {
-      const d = c[i] - c[i - 1], up = Math.max(d, 0), dn = Math.max(-d, 0);
-      if (i <= n) { g += up; l += dn; if (i === n) { g /= n; l /= n; out[i] = calc(); } }
-      else { g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n; out[i] = calc(); }
-    }
-    return out;
-  }
-  function atr(h, l, c, n) {
-    const out = new Array(c.length).fill(null);
-    let prev = null, sum = 0;
-    for (let i = 0; i < c.length; i++) {
-      const tr = i === 0 ? h[i] - l[i] : Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1]));
-      if (i < n - 1) { sum += tr; continue; }
-      if (i === n - 1) { sum += tr; prev = sum / n; } else prev = (prev * (n - 1) + tr) / n;
-      out[i] = prev;
-    }
-    return out;
-  }
-  function indicators(cs, p) {
-    const c = cs.map(x => x.close), h = cs.map(x => x.high), l = cs.map(x => x.low);
-    return { fast: ema(c, p.fast), slow: ema(c, p.slow), trend: ema(c, p.trend), rsi: rsi(c, p.rsi), atr: atr(h, l, c, p.atr) };
-  }
-  function levels(dir, entry, atrV, p) {
-    const risk = atrV * p.slAtr;
-    return { dir, entry, sl: entry - dir * risk, tp: entry + dir * risk * p.tpR };
-  }
-  // Signal on closed bar i; null if none
-  function signalAt(cs, ind, i, p) {
-    if (i < 1) return null;
-    const f = ind.fast, s = ind.slow, t = ind.trend[i], r = ind.rsi[i], a = ind.atr[i];
-    if ([f[i], f[i - 1], s[i], s[i - 1], t, r, a].some(v => v == null)) return null;
-    const c = cs[i].close;
-    if (f[i] > s[i] && f[i - 1] <= s[i - 1] && c > t && r > 50) return levels(1, c, a, p);
-    if (f[i] < s[i] && f[i - 1] >= s[i - 1] && c < t && r < 50) return levels(-1, c, a, p);
-    return null;
-  }
-  function newState(balance) { return { start: balance, equity: balance, pos: null, trades: [], curve: [], lastTime: null }; }
-  function openPos(st, lv, time, p, src) {
-    const dist = Math.abs(lv.entry - lv.sl);
-    if (!(dist > 0) || st.equity <= 0) return;
-    let qty = (st.equity * p.risk / 100) / dist;
-    qty = Math.min(qty, st.equity * p.lev / lv.entry);
-    st.pos = { ...lv, qty, time, riskAmt: qty * dist, src };
-  }
-  function closePos(st, time, price, reason, p) {
-    const ps = st.pos;
-    const pnl = (price - ps.entry) * ps.qty * ps.dir - (ps.entry + price) * ps.qty * p.fee / 100;
-    st.equity += pnl;
-    st.trades.push({ dir: ps.dir, entry: ps.entry, sl: ps.sl, tp: ps.tp, time: ps.time, src: ps.src, exit: price, exitTime: time, reason, pnl, r: pnl / ps.riskAmt });
-    st.pos = null;
-  }
-  // SL/TP check against a bar (gap-aware). SL checked first = conservative when both hit.
-  function checkBar(st, bar, p) {
-    const ps = st.pos;
-    if (!ps || bar.time <= ps.time) return;
-    if (ps.dir === 1 ? bar.low <= ps.sl : bar.high >= ps.sl)
-      return closePos(st, bar.time, ps.dir === 1 ? Math.min(bar.open, ps.sl) : Math.max(bar.open, ps.sl), 'SL', p);
-    if (ps.dir === 1 ? bar.high >= ps.tp : bar.low <= ps.tp)
-      return closePos(st, bar.time, ps.dir === 1 ? Math.max(bar.open, ps.tp) : Math.min(bar.open, ps.tp), 'TP', p);
-  }
-  // Live tick check (paper trading)
-  function checkPrice(st, price, time, p) {
-    const ps = st.pos;
-    if (!ps) return;
-    if (ps.dir === 1 ? price <= ps.sl : price >= ps.sl) return closePos(st, time, price, 'SL', p);
-    if (ps.dir === 1 ? price >= ps.tp : price <= ps.tp) return closePos(st, time, price, 'TP', p);
-  }
-  function unreal(st, price) { const ps = st.pos; return ps ? (price - ps.entry) * ps.qty * ps.dir : 0; }
-  // Process one closed bar
-  function step(st, cs, ind, i, p, auto = true) {
-    const bar = cs[i];
-    checkBar(st, bar, p);
-    const sig = signalAt(cs, ind, i, p);
-    if (auto && sig) {
-      if (st.pos && sig.dir !== st.pos.dir && p.exitOpp) closePos(st, bar.time, bar.close, 'กลับตัว', p);
-      if (!st.pos && (sig.dir === 1 || p.shorts)) openPos(st, sig, bar.time, p, 'auto');
-    }
-    st.curve.push({ time: bar.time, value: st.equity + unreal(st, bar.close) });
-    st.lastTime = bar.time;
-  }
-  function backtest(cs, ind, p, lastClosed) {
-    const st = newState(p.bal);
-    for (let i = 1; i <= lastClosed; i++) step(st, cs, ind, i, p);
-    return st;
-  }
-  function stats(st) {
-    const t = st.trades, wins = t.filter(x => x.pnl > 0);
-    const gw = wins.reduce((a, x) => a + x.pnl, 0), gl = -t.filter(x => x.pnl <= 0).reduce((a, x) => a + x.pnl, 0);
-    let peak = -Infinity, dd = 0;
-    for (const c of st.curve) { peak = Math.max(peak, c.value); dd = Math.max(dd, (peak - c.value) / peak); }
-    return {
-      n: t.length, win: t.length ? wins.length / t.length * 100 : 0,
-      net: (st.equity - st.start) / st.start * 100, pf: gl > 0 ? gw / gl : (gw > 0 ? Infinity : 0),
-      dd: dd * 100, avgR: t.length ? t.reduce((a, x) => a + x.r, 0) / t.length : 0
-    };
-  }
-  return { ema, rsi, atr, indicators, signalAt, levels, newState, openPos, closePos, checkBar, checkPrice, unreal, step, backtest, stats };
-})();
-if (typeof module !== 'undefined') module.exports = Core;
-</script>
-
+<script src="core.js"></script>
 <script>
 {
 const $ = id => document.getElementById(id);
 const HOSTS = ['https://api.binance.com', 'https://data-api.binance.vision'];
-const TZ = -new Date().getTimezoneOffset() * 60; // show local time on chart
+const TFS = ['5m', '15m', '1h', '4h', '1d'];
+const TZ = -new Date().getTimezoneOffset() * 60;
 const fmt = (v, d) => v == null || !isFinite(v) ? '–' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d ?? (Math.abs(v) >= 100 ? 2 : Math.abs(v) >= 1 ? 4 : 6) });
 const tstr = t => new Date(t * 1000).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const dirTxt = d => d === 1 ? '<span class="g">LONG</span>' : '<span class="r">SHORT</span>';
+const voteTxt = v => v == null ? '<span class="m">–</span>' : v > 0 ? '<span class="g">▲</span>' : v < 0 ? '<span class="r">▼</span>' : '<span class="m">●</span>';
+const scoreCls = s => s == null ? 'm' : s >= 30 ? 'g' : s <= -30 ? 'r' : 'm';
 
 let P, cs = [], ind = null, sym = '', tf = '', ws = null, paper = null, paperOn = false, lines = [];
 
+// ---- Settings (persisted) ----
+const NUMS = ['conf', 'adxMin', 'fast', 'slow', 'trend', 'rsi', 'atr', 'slAtr', 'tpR', 'risk', 'lev', 'fee', 'slip', 'funding', 'bal'];
+const BOOLS = ['p_shorts', 'p_exitOpp', 'a_sound', 'a_notify', 'a_forming'];
+$('p_strategy').innerHTML = Object.entries(Core.STRATS).map(([k, s]) => `<option value="${k}">${s.name}</option>`).join('');
+$('style').innerHTML = '<option value="">สไตล์: กำหนดเอง</option>' + Object.entries(Core.STYLES).map(([k, s]) => `<option value="${k}">${s.name} · ${s.tf}</option>`).join('');
 function readParams() {
-  const n = id => parseFloat($('p_' + id).value);
-  return { fast: n('fast'), slow: n('slow'), trend: n('trend'), rsi: n('rsi'), atr: n('atr'), slAtr: n('slAtr'), tpR: n('tpR'), risk: n('risk'), lev: n('lev'), fee: n('fee'), bal: n('bal'), shorts: $('p_shorts').checked, exitOpp: $('p_exitOpp').checked };
+  const p = { strategy: $('p_strategy').value, shorts: $('p_shorts').checked, exitOpp: $('p_exitOpp').checked };
+  NUMS.forEach(k => p[k] = parseFloat($('p_' + k).value) || 0);
+  return p;
 }
+function saveSettings() {
+  const s = { sym: $('sym').value, tf: $('tf').value, bars: $('bars').value, style: $('style').value, strategy: $('p_strategy').value, n: {}, b: {} };
+  NUMS.forEach(k => s.n[k] = $('p_' + k).value); BOOLS.forEach(k => s.b[k] = $(k).checked);
+  store.set('settings', s);
+}
+(function loadSettings() {
+  const s = store.get('settings'); if (!s) return;
+  ['sym', 'tf', 'bars', 'style'].forEach(k => { if (s[k] != null) $(k).value = s[k]; });
+  if (s.strategy) $('p_strategy').value = s.strategy;
+  NUMS.forEach(k => { if (s.n?.[k] != null) $('p_' + k).value = s.n[k]; });
+  BOOLS.forEach(k => { if (s.b?.[k] != null) $(k).checked = s.b[k]; });
+})();
 const status = s => $('status').textContent = s;
 
-// ---- Chart ----
+// ---- Charts ----
 const LC = window.LightweightCharts;
 const opts = { autoSize: true, layout: { background: { color: '#161b22' }, textColor: '#8b96a5' }, grid: { vertLines: { color: '#1f252e' }, horzLines: { color: '#1f252e' } }, timeScale: { timeVisible: true, borderColor: '#2a313c' }, rightPriceScale: { borderColor: '#2a313c' } };
 const chart = LC.createChart($('chart'), opts);
 const candle = chart.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', wickUpColor: '#26a69a', wickDownColor: '#ef5350', borderVisible: false });
-const sFast = chart.addLineSeries({ color: '#f0b90b', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-const sSlow = chart.addLineSeries({ color: '#4c8dff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-const sTrend = chart.addLineSeries({ color: '#b07cff', lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+const vol = chart.addHistogramSeries({ priceScaleId: '', priceFormat: { type: 'volume' }, lastValueVisible: false, priceLineVisible: false });
+vol.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+const mkLine = (color, w = 1, style = 0) => chart.addLineSeries({ color, lineWidth: w, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+const sFast = mkLine('#f0b90b'), sSlow = mkLine('#4c8dff'), sTrend = mkLine('#b07cff', 2), sST = mkLine('#9aa4b2', 1, 2);
 const eqChart = LC.createChart($('eqchart'), { ...opts, timeScale: { ...opts.timeScale, visible: false } });
 const eqLine = eqChart.addLineSeries({ color: '#f0b90b', lineWidth: 2 });
 const toBar = c => ({ time: c.time + TZ, open: c.open, high: c.high, low: c.low, close: c.close });
+const toVol = c => ({ time: c.time + TZ, value: c.volume, color: c.close >= c.open ? 'rgba(38,166,154,.35)' : 'rgba(239,83,80,.35)' });
 const toLine = arr => cs.map((c, i) => arr[i] == null ? null : { time: c.time + TZ, value: arr[i] }).filter(Boolean);
 
 // ---- Data ----
@@ -256,8 +189,7 @@ async function fetchKlines(symbol, interval, total) {
       let out = [], end = null;
       while (out.length < total) {
         const lim = Math.min(1000, total - out.length);
-        const url = `${host}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${lim}` + (end ? `&endTime=${end}` : '');
-        const r = await fetch(url);
+        const r = await fetch(`${host}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${lim}` + (end ? `&endTime=${end}` : ''));
         if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
         const rows = await r.json();
         if (!rows.length) break;
@@ -265,41 +197,40 @@ async function fetchKlines(symbol, interval, total) {
         end = rows[0][0] - 1;
         if (rows.length < lim) break;
       }
-      return out.map(k => ({ time: k[0] / 1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
+      return out.map(k => ({ time: k[0] / 1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5] }));
     } catch (e) { lastErr = e; }
   }
   throw lastErr;
 }
 
 async function load() {
-  P = readParams();
+  P = readParams(); saveSettings();
   sym = $('sym').value.trim().toUpperCase(); tf = $('tf').value;
   status('กำลังโหลด...');
   try { cs = await fetchKlines(sym, tf, +$('bars').value); }
   catch (e) { status('โหลดไม่สำเร็จ: ' + e.message); return; }
   if (cs.length < P.trend + 2) { status('ข้อมูลน้อยเกินไปสำหรับ EMA เทรนด์'); return; }
-  candle.setData(cs.map(toBar));
+  candle.setData(cs.map(toBar)); vol.setData(cs.map(toVol));
   recompute(true);
   loadPaper();
   lastMsg = Date.now();
   liveAnalyze();
   connectWS();
+  scanMTF();
   status(`${sym} ${tf} · ${cs.length} แท่ง · live`);
 }
+const lastClosed = () => cs.length - 2;
 
 function recompute(full) {
   ind = Core.indicators(cs, P);
-  sFast.setData(toLine(ind.fast)); sSlow.setData(toLine(ind.slow)); sTrend.setData(toLine(ind.trend));
+  sFast.setData(toLine(ind.fast)); sSlow.setData(toLine(ind.slow)); sTrend.setData(toLine(ind.trend)); sST.setData(toLine(ind.st.line));
   if (full) runBacktest();
   renderSignal();
 }
-const lastClosed = () => cs.length - 2; // last element is the still-open candle
 
-// ---- Backtest ----
-let btMarkers = [];
+// ---- Backtest + comparison ----
 function runBacktest() {
-  const st = Core.backtest(cs, ind, P, lastClosed());
-  const s = Core.stats(st);
+  const st = Core.backtest(cs, ind, P, lastClosed()), s = Core.stats(st);
   $('btStats').innerHTML = [
     ['จำนวนเทรด', s.n], ['Win rate', fmt(s.win, 1) + '%'], ['กำไรสุทธิ', `<span class="${s.net >= 0 ? 'g' : 'r'}">${fmt(s.net, 2)}%</span>`],
     ['Profit factor', fmt(s.pf, 2)], ['Max drawdown', fmt(s.dd, 2) + '%'], ['เฉลี่ย R/ไม้', fmt(s.avgR, 2)]
@@ -307,40 +238,40 @@ function runBacktest() {
   eqLine.setData(st.curve.map(c => ({ time: c.time + TZ, value: c.value })));
   eqChart.timeScale().fitContent();
   $('btTable').innerHTML = tradeRows(st.trades.slice().reverse());
-  btMarkers = [];
+  const mk = [];
   for (const t of st.trades) {
-    btMarkers.push({ time: t.time + TZ, position: t.dir === 1 ? 'belowBar' : 'aboveBar', color: t.dir === 1 ? '#26a69a' : '#ef5350', shape: t.dir === 1 ? 'arrowUp' : 'arrowDown', text: t.dir === 1 ? 'L' : 'S' });
-    btMarkers.push({ time: t.exitTime + TZ, position: t.dir === 1 ? 'aboveBar' : 'belowBar', color: t.pnl > 0 ? '#26a69a' : '#ef5350', shape: 'circle', text: t.reason });
+    mk.push({ time: t.time + TZ, position: t.dir === 1 ? 'belowBar' : 'aboveBar', color: t.dir === 1 ? '#26a69a' : '#ef5350', shape: t.dir === 1 ? 'arrowUp' : 'arrowDown', text: t.dir === 1 ? 'L' : 'S' });
+    mk.push({ time: t.exitTime + TZ, position: t.dir === 1 ? 'aboveBar' : 'belowBar', color: t.pnl > 0 ? '#26a69a' : '#ef5350', shape: 'circle', text: t.reason });
   }
-  if (st.pos) btMarkers.push({ time: st.pos.time + TZ, position: st.pos.dir === 1 ? 'belowBar' : 'aboveBar', color: '#f0b90b', shape: st.pos.dir === 1 ? 'arrowUp' : 'arrowDown', text: 'เปิดอยู่' });
-  btMarkers.sort((a, b) => a.time - b.time);
-  candle.setMarkers(btMarkers);
+  if (st.pos) mk.push({ time: st.pos.time + TZ, position: st.pos.dir === 1 ? 'belowBar' : 'aboveBar', color: '#f0b90b', shape: st.pos.dir === 1 ? 'arrowUp' : 'arrowDown', text: 'เปิดอยู่' });
+  candle.setMarkers(mk.sort((a, b) => a.time - b.time));
+  const cmp = Core.compareAll(cs, ind, P, lastClosed()).sort((a, b) => b.net - a.net);
+  $('cmp').innerHTML = '<tr><th>กลยุทธ์</th><th>เทรด</th><th>Win%</th><th>กำไร%</th><th>DD%</th></tr>' + cmp.map(c =>
+    `<tr class="click ${c.key === P.strategy ? 'sel' : ''}" data-k="${c.key}"><td>${c.name}</td><td class="num">${c.n}</td><td class="num">${fmt(c.win, 0)}</td><td class="num ${c.net >= 0 ? 'g' : 'r'}">${fmt(c.net, 1)}</td><td class="num">${fmt(c.dd, 1)}</td></tr>`).join('');
 }
+$('cmp').onclick = e => { const tr = e.target.closest('tr[data-k]'); if (tr) { $('p_strategy').value = tr.dataset.k; applyParams(); } };
 function tradeRows(tr) {
   if (!tr.length) return '<tr><td class="m">ยังไม่มีเทรด</td></tr>';
   return '<tr><th>เข้า</th><th>ฝั่ง</th><th>ราคาเข้า</th><th>ราคาออก</th><th>ออกเพราะ</th><th>R</th><th>P/L</th></tr>' + tr.map(t =>
-    `<tr><td class="num">${tstr(t.time)}</td><td class="${t.dir === 1 ? 'g' : 'r'}">${t.dir === 1 ? 'Long' : 'Short'}</td><td class="num">${fmt(t.entry)}</td><td class="num">${fmt(t.exit)}</td><td>${t.reason}</td><td class="num">${fmt(t.r, 2)}</td><td class="num ${t.pnl >= 0 ? 'g' : 'r'}">${fmt(t.pnl, 2)}</td></tr>`).join('');
+    `<tr><td class="num">${tstr(t.time)}</td><td>${dirTxt(t.dir)}</td><td class="num">${fmt(t.entry)}</td><td class="num">${fmt(t.exit)}</td><td>${t.reason}</td><td class="num">${fmt(t.r, 2)}</td><td class="num ${t.pnl >= 0 ? 'g' : 'r'}">${fmt(t.pnl, 2)}</td></tr>`).join('');
 }
 
-// ---- Latest signal ----
+// ---- Confirmed signal ----
 function renderSignal() {
   const i = lastClosed(), c = cs[i];
   let sig = null, at = i;
   for (let j = i; j > i - 5 && j > 0; j--) { sig = Core.signalAt(cs, ind, j, P); if (sig) { at = j; break; } }
   const trendUp = c.close > ind.trend[i];
-  const price = cs[cs.length - 1].close;
-  let title, kv;
+  let kv;
   if (sig) {
-    title = `<span class="${sig.dir === 1 ? 'g' : 'r'}">${sig.dir === 1 ? 'LONG' : 'SHORT'}</span> <small class="m" style="font-size:13px">${i - at === 0 ? 'แท่งล่าสุด' : (i - at) + ' แท่งก่อน'}</small>`;
+    $('sigTitle').innerHTML = `${dirTxt(sig.dir)} <small class="m" style="font-size:13px">${i === at ? 'แท่งล่าสุด' : (i - at) + ' แท่งก่อน'}</small>`;
     kv = [['จุดเข้า', fmt(sig.entry)], ['Stop loss', `<span class="r">${fmt(sig.sl)}</span>`], ['Take profit', `<span class="g">${fmt(sig.tp)}</span>`], ['R:R', '1 : ' + P.tpR]];
   } else {
     const hyp = Core.levels(trendUp ? 1 : -1, c.close, ind.atr[i], P);
-    title = '<span class="m">รอสัญญาณ</span>';
+    $('sigTitle').innerHTML = '<span class="m">รอสัญญาณ</span>';
     kv = [[`ถ้าเข้า ${trendUp ? 'Long' : 'Short'} ตอนนี้: SL`, fmt(hyp.sl)], ['TP', fmt(hyp.tp)]];
-    sig = null;
   }
-  kv.push(['ราคาปัจจุบัน', fmt(price)], ['เทรนด์ (EMA ' + P.trend + ')', trendUp ? '<span class="g">ขาขึ้น</span>' : '<span class="r">ขาลง</span>'], ['RSI', fmt(ind.rsi[i], 1)], ['ATR', fmt(ind.atr[i])]);
-  $('sigTitle').innerHTML = title;
+  kv.push(['กลยุทธ์', Core.STRATS[P.strategy].name]);
   $('sigKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
   drawLines(sig);
 }
@@ -352,20 +283,49 @@ function drawLines(sig) {
   else if (sig) { add(sig.entry, '#f0b90b', 'Entry'); add(sig.sl, '#ef5350', 'SL'); add(sig.tp, '#26a69a', 'TP'); }
 }
 
+// ---- Alerts ----
+const alerted = new Set();
+let audio = null;
+function beep(dir) {
+  try {
+    audio = audio || new AudioContext();
+    [0, 0.18].forEach((d, k) => {
+      const o = audio.createOscillator(), g = audio.createGain();
+      o.frequency.value = dir === 1 ? 660 + k * 220 : 880 - k * 220;
+      g.gain.setValueAtTime(0.15, audio.currentTime + d); g.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + d + 0.16);
+      o.connect(g).connect(audio.destination); o.start(audio.currentTime + d); o.stop(audio.currentTime + d + 0.17);
+    });
+  } catch {}
+}
+function alertSig(kind, sig, time, label = `${sym} ${tf}`) {
+  const key = `${label}|${kind}|${time}|${sig.dir}`;
+  if (alerted.has(key)) return;
+  alerted.add(key);
+  const msg = `${label} ${kind}: ${sig.dir === 1 ? 'LONG' : 'SHORT'} @ ${fmt(sig.entry)} · SL ${fmt(sig.sl)} · TP ${fmt(sig.tp)}`;
+  const log = $('log'); if (log.querySelector('.m')) log.innerHTML = '';
+  log.insertAdjacentHTML('afterbegin', `<div><span class="m num">${new Date().toLocaleTimeString('th-TH')}</span> ${msg.replace(/LONG|SHORT/, m => dirTxt(m === 'LONG' ? 1 : -1))}</div>`);
+  if ($('a_sound').checked) beep(sig.dir);
+  if ($('a_notify').checked && 'Notification' in window) {
+    try {
+      if (Notification.permission === 'granted') new Notification('Crypto Signal Lab', { body: msg });
+      else if (Notification.permission !== 'denied') Notification.requestPermission();
+    } catch {}
+  }
+}
+
 // ---- Live feed ----
+let lastMsg = 0, liveTimer = null;
 function connectWS() {
   if (ws) { ws.onclose = null; ws.close(); }
   const s = sym.toLowerCase(), t = tf;
   ws = new WebSocket(`wss://stream.binance.com:9443/ws/${s}@kline_${t}`);
   ws.onmessage = ev => {
     const k = JSON.parse(ev.data).k;
-    applyBar({ time: k.t / 1000, open: +k.o, high: +k.h, low: +k.l, close: +k.c });
+    applyBar({ time: k.t / 1000, open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v });
   };
   ws.onclose = () => { status('การเชื่อมต่อหลุด กำลังต่อใหม่...'); setTimeout(() => { if (sym === s && tf === t) connectWS(); }, 3000); };
   ws.onopen = () => status(`${sym} ${tf} · ${cs.length} แท่ง · live`);
 }
-// Shared by WebSocket and REST fallback
-let lastMsg = 0, liveTimer = null;
 function applyBar(bar) {
   if (!cs.length) return;
   lastMsg = Date.now();
@@ -373,42 +333,67 @@ function applyBar(bar) {
   if (bar.time < last.time) return;
   if (bar.time === last.time) cs[cs.length - 1] = bar;
   else { cs.push(bar); onCandleClosed(); }
-  candle.update(toBar(bar));
+  candle.update(toBar(bar)); vol.update(toVol(bar));
   if (paper) { const had = paper.pos; Core.checkPrice(paper, bar.close, bar.time, P); if (had && !paper.pos) { savePaper(); drawLines(null); } renderPaper(); }
   if (!liveTimer) liveTimer = setTimeout(() => { liveTimer = null; liveAnalyze(); }, 1000);
 }
-// Re-analyze continuously on the forming candle (preview, not confirmed)
 function liveAnalyze() {
   if (cs.length < 3) return;
   ind = Core.indicators(cs, P);
   const i = cs.length - 1, c = cs[i], t = c.time + TZ;
-  [[sFast, ind.fast], [sSlow, ind.slow], [sTrend, ind.trend]].forEach(([s, a]) => a[i] != null && s.update({ time: t, value: a[i] }));
-  const sig = Core.signalAt(cs, ind, i, P);
-  const up = c.close > ind.trend[i];
-  $('liveTitle').innerHTML = sig
-    ? `<span class="${sig.dir === 1 ? 'g' : 'r'}">กำลังเกิด ${sig.dir === 1 ? 'LONG' : 'SHORT'}</span>`
-    : (up ? '<span class="g">เทรนด์ขึ้น</span>' : '<span class="r">เทรนด์ลง</span>') + ' <span class="m" style="font-size:15px">· ยังไม่มีสัญญาณ</span>';
-  const gap = (ind.fast[i] - ind.slow[i]) / c.close * 100;
-  const kv = [['ราคา', fmt(c.close)], ['RSI', fmt(ind.rsi[i], 1)], ['EMA เร็ว − ช้า', `<span class="${gap >= 0 ? 'g' : 'r'}">${fmt(gap, 3)}%</span>`], ['ATR', fmt(ind.atr[i])]];
+  [[sFast, ind.fast], [sSlow, ind.slow], [sTrend, ind.trend], [sST, ind.st.line]].forEach(([s, a]) => a[i] != null && s.update({ time: t, value: a[i] }));
+  const sig = Core.signalAt(cs, ind, i, P), sc = ind.score[i];
+  $('liveTitle').innerHTML = sig ? `กำลังเกิด ${dirTxt(sig.dir)}` : `<span class="${scoreCls(sc)}">${sc == null ? '–' : sc >= 30 ? 'แนวโน้มขึ้น' : sc <= -30 ? 'แนวโน้มลง' : 'ไซด์เวย์ / ไม่ชัด'}</span> <span class="m" style="font-size:15px">· ยังไม่มีสัญญาณ</span>`;
+  $('scoreTxt').innerHTML = `<span class="${scoreCls(sc)}">${fmt(sc, 0)}</span>`;
+  const f = $('gaugeFill'), w = Math.abs(sc || 0) / 2;
+  f.style.left = (sc >= 0 ? 50 : 50 - w) + '%'; f.style.width = w + '%'; f.style.background = sc >= 0 ? 'var(--up)' : 'var(--dn)';
+  const kv = [['ราคา', fmt(c.close)], ['RSI', fmt(ind.rsi[i], 1)], ['ADX', fmt(ind.adx.adx[i], 1)], ['ATR', fmt(ind.atr[i])]];
   if (sig) kv.splice(1, 0, ['จุดเข้า (ถ้าปิดตอนนี้)', fmt(sig.entry)], ['SL', `<span class="r">${fmt(sig.sl)}</span>`], ['TP', `<span class="g">${fmt(sig.tp)}</span>`]);
   kv.push(['อัปเดตล่าสุด', new Date().toLocaleTimeString('th-TH')]);
   $('liveKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
+  $('votes').innerHTML = Core.votes(cs, ind, i, P).map((v, k) => `<div><span class="m">${Core.VOTE_NAMES[k]}</span>${voteTxt(v)}</div>`).join('');
+  if (sig && $('a_forming').checked) alertSig('กำลังก่อตัว', sig, c.time);
 }
-// Watchdog: if WebSocket is silent > 10s, poll REST every 5s
+// Watchdog: REST fallback when WebSocket is silent
 setInterval(async () => {
   if (!cs.length || Date.now() - lastMsg < 10000) return;
-  try {
-    const rows = await fetchKlines(sym, tf, 2);
-    rows.forEach(applyBar);
-    status(`${sym} ${tf} · live (REST สำรอง)`);
-  } catch (e) { status('ดึงข้อมูลไม่ได้: ' + e.message); }
+  try { (await fetchKlines(sym, tf, 2)).forEach(applyBar); status(`${sym} ${tf} · live (REST สำรอง)`); }
+  catch (e) { status('ดึงข้อมูลไม่ได้: ' + e.message); }
 }, 5000);
 function onCandleClosed() {
   recompute(true);
-  const i = lastClosed();
+  const i = lastClosed(), sig = Core.signalAt(cs, ind, i, P);
+  if (sig) alertSig('ยืนยัน', sig, cs[i].time);
   if (paper && paperOn && cs[i].time > (paper.lastTime ?? 0)) { Core.step(paper, cs, ind, i, P, true); savePaper(); }
   renderSignal(); renderPaper();
 }
+
+// ---- Multi-timeframe overview ----
+let mtfBusy = false;
+async function scanMTF() {
+  if (mtfBusy || !sym) return;
+  mtfBusy = true;
+  const s = sym, rows = [];
+  for (const t of TFS) {
+    try {
+      const k = t === tf && cs.length ? cs.slice(-400) : await fetchKlines(s, t, 400);
+      const I = Core.indicators(k, P), i = k.length - 2;
+      let sig = null, at = i;
+      for (let j = i; j > i - 3; j--) { sig = Core.signalAt(k, I, j, P); if (sig) { at = j; break; } }
+      if (sig && i === at && t !== tf) alertSig('ยืนยัน', sig, k[i].time, `${s} ${t}`);
+      const style = Object.values(Core.STYLES).find(x => x.tf === t);
+      rows.push(`<tr class="click ${t === tf ? 'sel' : ''}" data-tf="${t}"><td><b>${t}</b> <span class="m">${style ? style.name : ''}</span></td>
+        <td class="num ${scoreCls(I.score[k.length - 1])}">${fmt(I.score[k.length - 1], 0)}</td>
+        <td>${k[i].close > I.trend[i] ? '<span class="g">ขึ้น</span>' : '<span class="r">ลง</span>'}</td>
+        <td>${sig ? dirTxt(sig.dir) + ` <span class="m">${i - at ? (i - at) + ' แท่งก่อน' : 'ล่าสุด'}</span>` : '<span class="m">รอ</span>'}</td>
+        <td class="num">${sig ? fmt(sig.entry) : '–'}</td><td class="num r">${sig ? fmt(sig.sl) : '–'}</td><td class="num g">${sig ? fmt(sig.tp) : '–'}</td></tr>`);
+    } catch (e) { rows.push(`<tr><td><b>${t}</b></td><td colspan="6" class="m">โหลดไม่ได้</td></tr>`); }
+  }
+  if (s === sym) $('mtf').innerHTML = '<tr><th>Timeframe</th><th>คะแนน</th><th>เทรนด์</th><th>สัญญาณ</th><th>เข้า</th><th>SL</th><th>TP</th></tr>' + rows.join('');
+  mtfBusy = false;
+}
+setInterval(scanMTF, 30000);
+$('mtf').onclick = e => { const tr = e.target.closest('tr[data-tf]'); if (tr && tr.dataset.tf !== tf) { $('tf').value = tr.dataset.tf; $('style').value = ''; load(); } };
 
 // ---- Paper trading ----
 const pKey = () => `paper:${sym}:${tf}`;
@@ -416,7 +401,7 @@ function loadPaper() {
   const saved = store.get(pKey());
   paper = saved?.st || Core.newState(P.bal);
   paperOn = !!saved?.on;
-  if (paperOn) { // catch up candles closed while page was closed
+  if (paperOn) {
     for (let i = 1; i <= lastClosed(); i++) if (cs[i].time > (paper.lastTime ?? Infinity)) Core.step(paper, cs, ind, i, P, true);
     savePaper();
   }
@@ -425,28 +410,38 @@ function loadPaper() {
 const savePaper = () => store.set(pKey(), { st: paper, on: paperOn });
 function renderPaper() {
   if (!paper) return;
-  const price = cs[cs.length - 1]?.close, u = Core.unreal(paper, price), ps = paper.pos;
+  const last = cs[cs.length - 1], u = Core.unreal(paper, last?.close, last?.time, P), ps = paper.pos;
   const kv = [['สถานะ Auto', paperOn ? '<span class="g">ทำงาน</span>' : '<span class="m">หยุด</span>'], ['เงินทุน', fmt(paper.equity, 2) + ' USDT'], ['กำไร/ขาดทุนรวม', `<span class="${paper.equity - paper.start >= 0 ? 'g' : 'r'}">${fmt((paper.equity - paper.start) / paper.start * 100, 2)}%</span>`]];
-  if (ps) kv.push(['ถือ', `<span class="${ps.dir === 1 ? 'g' : 'r'}">${ps.dir === 1 ? 'Long' : 'Short'}</span> ${fmt(ps.qty, 6)}`], ['ราคาเข้า', fmt(ps.entry)], ['SL', `<span class="r">${fmt(ps.sl)}</span>`], ['TP', `<span class="g">${fmt(ps.tp)}</span>`], ['P/L ลอย', `<span class="${u >= 0 ? 'g' : 'r'}">${fmt(u, 2)}</span>`]);
+  if (ps) kv.push(['ถือ', `${dirTxt(ps.dir)} ${fmt(ps.qty, 6)}`], ['ราคาเข้า', fmt(ps.entry)], ['SL', `<span class="r">${fmt(ps.sl)}</span>`], ['TP', `<span class="g">${fmt(ps.tp)}</span>`], ['P/L ลอย (หักค่าใช้จ่าย)', `<span class="${u >= 0 ? 'g' : 'r'}">${fmt(u, 2)}</span>`]);
   $('ptKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
   $('ptTable').innerHTML = tradeRows(paper.trades.slice().reverse());
 }
 function manual(dir) {
   if (!paper || !cs.length) return;
   if (paper.pos) { status('มีสถานะเปิดอยู่ ปิดก่อน'); return; }
-  const last = cs[cs.length - 1], a = ind.atr[lastClosed()];
-  Core.openPos(paper, Core.levels(dir, last.close, a, P), last.time, P, 'manual');
+  const last = cs[cs.length - 1];
+  Core.openPos(paper, Core.levels(dir, last.close, ind.atr[lastClosed()], P), last.time, P, 'manual');
   savePaper(); renderPaper(); drawLines(null);
 }
 $('mLong').onclick = () => manual(1);
 $('mShort').onclick = () => manual(-1);
 $('mClose').onclick = () => { if (paper?.pos) { const l = cs[cs.length - 1]; Core.closePos(paper, l.time, l.close, 'ปิดเอง', P); savePaper(); renderPaper(); renderSignal(); } };
-$('ptStart').onclick = () => { if (!paper) return; paperOn = true; paper.lastTime = cs[lastClosed()].time; savePaper(); renderPaper(); };
+$('ptStart').onclick = () => { if (!paper || !cs.length) return; paperOn = true; paper.lastTime = cs[lastClosed()].time; savePaper(); renderPaper(); };
 $('ptStop').onclick = () => { paperOn = false; savePaper(); renderPaper(); };
 $('ptReset').onclick = () => { if (!cs.length) return; paper = Core.newState(P.bal); paperOn = false; savePaper(); renderPaper(); renderSignal(); };
+
+// ---- Controls ----
+function applyParams() { P = readParams(); saveSettings(); if (cs.length) { recompute(true); liveAnalyze(); scanMTF(); } }
+$('style').onchange = () => {
+  const s = Core.STYLES[$('style').value]; if (!s) return;
+  $('tf').value = s.tf; $('p_slAtr').value = s.slAtr; $('p_tpR').value = s.tpR;
+  load();
+};
+$('tf').onchange = () => { $('style').value = ''; };
 $('load').onclick = load;
-$('apply').onclick = () => { P = readParams(); if (cs.length) { recompute(true); liveAnalyze(); } };
+$('apply').onclick = applyParams;
 $('sym').onkeydown = e => { if (e.key === 'Enter') load(); };
+BOOLS.slice(2).forEach(k => $(k).onchange = saveSettings);
 load();
 }
 </script>

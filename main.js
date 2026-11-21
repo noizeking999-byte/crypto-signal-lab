@@ -21,6 +21,8 @@ function setupUpdater() {
   setInterval(check, 60 * 60 * 1000); // every hour
 }
 
+app.setAppUserModelId('com.noizeking.cryptosignallab'); // Windows notifications
+
 app.whenReady().then(() => {
   // Allow the local page to read Binance public REST responses (CORS) — Binance hosts only
   session.defaultSession.webRequest.onHeadersReceived({ urls: BINANCE }, (d, cb) => {
@@ -32,7 +34,7 @@ app.whenReady().then(() => {
   win = new BrowserWindow({
     width: 1400, height: 900, backgroundColor: '#0e1116', autoHideMenuBar: true,
     title: `Crypto Signal Lab v${app.getVersion()}`,
-    webPreferences: { contextIsolation: true, nodeIntegration: false }
+    webPreferences: { contextIsolation: true, nodeIntegration: false, autoplayPolicy: 'no-user-gesture-required' }
   });
   win.on('page-title-updated', e => e.preventDefault()); // keep version in title
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
