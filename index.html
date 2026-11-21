@@ -60,6 +60,13 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
       <div class="note">คะแนน = ผลโหวตของ 16 อินดิเคเตอร์ (−100 ขาลงทั้งหมด … +100 ขาขึ้นทั้งหมด) · สัญญาณ = ตามกลยุทธ์ที่เลือก ภายใน 3 แท่งล่าสุด</div>
     </div>
     <div class="card">
+      <h2>Whale Tracker: วาฬกำลังซื้อ/ขายเหรียญไหน (ไม้ใหญ่ Spot แบบ real-time)</h2>
+      <div class="scroll"><table id="whaleTbl"><tr><td class="m">กำลังเชื่อมต่อ...</td></tr></table></div>
+      <div class="note" id="whaleNote"></div>
+      <h2 style="margin-top:12px">ไม้วาฬล่าสุด</h2>
+      <div class="scroll" style="max-height:220px"><table id="whaleFeed"><tr><td class="m">รอไม้ใหญ่...</td></tr></table></div>
+    </div>
+    <div class="card">
       <h2>Backtest (จำลองย้อนหลัง หักค่าธรรมเนียม + slippage + funding แล้ว)</h2>
       <div class="stats" id="btStats"></div>
       <div class="two">
@@ -79,6 +86,15 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
       <div class="kv" id="liveKv"></div>
       <div class="votes" id="votes"></div>
       <div class="note">อัปเดตทุกวินาทีตามราคาจริง · สัญญาณที่กำลังก่อตัวอาจหายไปก่อนแท่งปิด</div>
+    </div>
+    <div class="card">
+      <h2 id="wsTitle">วาฬในเหรียญนี้</h2>
+      <div class="kv" id="whaleSpotKv"></div>
+      <h2 style="margin-top:12px">รายใหญ่ฝั่ง Futures (Binance top traders, 1 ชม.)</h2>
+      <div class="kv" id="futKv"><span class="m">กำลังโหลด...</span><span></span></div>
+      <div class="log" id="futNotes"></div>
+      <h2 style="margin-top:12px">กำแพงออเดอร์ (±3% จากราคา)</h2>
+      <div class="kv" id="wallKv"><span class="m">กำลังโหลด...</span><span></span></div>
     </div>
     <div class="card">
       <h2>สัญญาณยืนยันล่าสุด (แท่งที่ปิดแล้ว)</h2>
@@ -107,6 +123,8 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
         <label>ATR <input type="number" id="p_atr" value="14"></label>
         <label>SL = ATR × <input type="number" step="0.1" id="p_slAtr" value="1.5"></label>
         <label>TP = SL × (R) <input type="number" step="0.1" id="p_tpR" value="2"></label>
+        <label>SL ห่างขั้นต่ำ (% ของราคา) <input type="number" step="0.05" id="p_minSl" value="0.2"></label>
+        <label>TP ต้อง ≥ ต้นทุนไป-กลับ × <input type="number" step="0.5" id="p_minEdge" value="3"></label>
         <label>เสี่ยงต่อไม้ (%) <input type="number" step="0.1" id="p_risk" value="1"></label>
         <label>เลเวอเรจสูงสุด <input type="number" step="1" id="p_lev" value="1"></label>
         <label>ค่าธรรมเนียม/ข้าง (%) <input type="number" step="0.01" id="p_fee" value="0.1"></label>
@@ -115,6 +133,10 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
         <label>ทุนเริ่มต้น (USDT) <input type="number" id="p_bal" value="1000"></label>
         <label>เปิด Short ได้ <input type="checkbox" id="p_shorts" checked style="width:auto"></label>
         <label>ออกเมื่อสัญญาณกลับตัว <input type="checkbox" id="p_exitOpp" checked style="width:auto"></label>
+        <label>วาฬ: ขั้นต่ำ BTC/ETH ($) <input type="number" id="p_whaleBig" value="250000"></label>
+        <label>วาฬ: ขั้นต่ำเหรียญอื่น ($) <input type="number" id="p_whaleSmall" value="50000"></label>
+        <label>แจ้งเตือนไม้วาฬเกิน ($) <input type="number" id="p_whaleAlert" value="1000000"></label>
+        <label>วาฬ: จำนวนเหรียญที่สแกน <input type="number" id="p_whaleN" value="25"></label>
         <label>เสียงแจ้งเตือน <input type="checkbox" id="a_sound" checked style="width:auto"></label>
         <label>แจ้งเตือน Windows <input type="checkbox" id="a_notify" checked style="width:auto"></label>
         <label>แจ้งตอนสัญญาณกำลังก่อตัว <input type="checkbox" id="a_forming" style="width:auto"></label>
@@ -127,6 +149,7 @@ details label{display:flex;justify-content:space-between;align-items:center;gap:
 
 <script src="lw.js"></script>
 <script src="core.js"></script>
+<script src="whale.js"></script>
 <script>
 {
 const $ = id => document.getElementById(id);
@@ -138,12 +161,13 @@ const tstr = t => new Date(t * 1000).toLocaleString('th-TH', { dateStyle: 'short
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
 const dirTxt = d => d === 1 ? '<span class="g">LONG</span>' : '<span class="r">SHORT</span>';
 const voteTxt = v => v == null ? '<span class="m">–</span>' : v > 0 ? '<span class="g">▲</span>' : v < 0 ? '<span class="r">▼</span>' : '<span class="m">●</span>';
+const distPct = (lv, x) => `<span class="m">(${x > lv.entry ? '+' : ''}${fmt((x - lv.entry) / lv.entry * 100, 2)}%)</span>`;
 const scoreCls = s => s == null ? 'm' : s >= 30 ? 'g' : s <= -30 ? 'r' : 'm';
 
 let P, cs = [], ind = null, sym = '', tf = '', ws = null, paper = null, paperOn = false, lines = [];
 
 // ---- Settings (persisted) ----
-const NUMS = ['conf', 'adxMin', 'fast', 'slow', 'trend', 'rsi', 'atr', 'slAtr', 'tpR', 'risk', 'lev', 'fee', 'slip', 'funding', 'bal'];
+const NUMS = ['conf', 'adxMin', 'fast', 'slow', 'trend', 'rsi', 'atr', 'slAtr', 'tpR', 'risk', 'lev', 'fee', 'slip', 'funding', 'bal', 'whaleBig', 'whaleSmall', 'whaleAlert', 'whaleN', 'minSl', 'minEdge'];
 const BOOLS = ['p_shorts', 'p_exitOpp', 'a_sound', 'a_notify', 'a_forming'];
 $('p_strategy').innerHTML = Object.entries(Core.STRATS).map(([k, s]) => `<option value="${k}">${s.name}</option>`).join('');
 $('style').innerHTML = '<option value="">สไตล์: กำหนดเอง</option>' + Object.entries(Core.STYLES).map(([k, s]) => `<option value="${k}">${s.name} · ${s.tf}</option>`).join('');
@@ -217,6 +241,7 @@ async function load() {
   liveAnalyze();
   connectWS();
   scanMTF();
+  startWhale(); updateFutures(); updateWalls(); wDirty = true;
   status(`${sym} ${tf} · ${cs.length} แท่ง · live`);
 }
 const lastClosed = () => cs.length - 2;
@@ -265,11 +290,11 @@ function renderSignal() {
   let kv;
   if (sig) {
     $('sigTitle').innerHTML = `${dirTxt(sig.dir)} <small class="m" style="font-size:13px">${i === at ? 'แท่งล่าสุด' : (i - at) + ' แท่งก่อน'}</small>`;
-    kv = [['จุดเข้า', fmt(sig.entry)], ['Stop loss', `<span class="r">${fmt(sig.sl)}</span>`], ['Take profit', `<span class="g">${fmt(sig.tp)}</span>`], ['R:R', '1 : ' + P.tpR]];
+    kv = [['จุดเข้า', fmt(sig.entry)], ['Stop loss', `<span class="r">${fmt(sig.sl)}</span> ${distPct(sig, sig.sl)}`], ['Take profit', `<span class="g">${fmt(sig.tp)}</span> ${distPct(sig, sig.tp)}`], ['R:R', '1 : ' + P.tpR]];
   } else {
     const hyp = Core.levels(trendUp ? 1 : -1, c.close, ind.atr[i], P);
     $('sigTitle').innerHTML = '<span class="m">รอสัญญาณ</span>';
-    kv = [[`ถ้าเข้า ${trendUp ? 'Long' : 'Short'} ตอนนี้: SL`, fmt(hyp.sl)], ['TP', fmt(hyp.tp)]];
+    kv = [[`ถ้าเข้า ${trendUp ? 'Long' : 'Short'} ตอนนี้: SL`, `${fmt(hyp.sl)} ${distPct(hyp, hyp.sl)}`], ['TP', `${fmt(hyp.tp)} ${distPct(hyp, hyp.tp)}`]];
   }
   kv.push(['กลยุทธ์', Core.STRATS[P.strategy].name]);
   $('sigKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
@@ -301,10 +326,13 @@ function alertSig(kind, sig, time, label = `${sym} ${tf}`) {
   const key = `${label}|${kind}|${time}|${sig.dir}`;
   if (alerted.has(key)) return;
   alerted.add(key);
-  const msg = `${label} ${kind}: ${sig.dir === 1 ? 'LONG' : 'SHORT'} @ ${fmt(sig.entry)} · SL ${fmt(sig.sl)} · TP ${fmt(sig.tp)}`;
+  notify(`${label} ${kind}: ${sig.dir === 1 ? 'LONG' : 'SHORT'} @ ${fmt(sig.entry)} · SL ${fmt(sig.sl)} · TP ${fmt(sig.tp)}`, sig.dir);
+}
+function notify(msg, dir) {
   const log = $('log'); if (log.querySelector('.m')) log.innerHTML = '';
   log.insertAdjacentHTML('afterbegin', `<div><span class="m num">${new Date().toLocaleTimeString('th-TH')}</span> ${msg.replace(/LONG|SHORT/, m => dirTxt(m === 'LONG' ? 1 : -1))}</div>`);
-  if ($('a_sound').checked) beep(sig.dir);
+  while (log.children.length > 50) log.lastChild.remove();
+  if ($('a_sound').checked) beep(dir);
   if ($('a_notify').checked && 'Notification' in window) {
     try {
       if (Notification.permission === 'granted') new Notification('Crypto Signal Lab', { body: msg });
@@ -342,16 +370,18 @@ function liveAnalyze() {
   ind = Core.indicators(cs, P);
   const i = cs.length - 1, c = cs[i], t = c.time + TZ;
   [[sFast, ind.fast], [sSlow, ind.slow], [sTrend, ind.trend], [sST, ind.st.line]].forEach(([s, a]) => a[i] != null && s.update({ time: t, value: a[i] }));
-  const sig = Core.signalAt(cs, ind, i, P), sc = ind.score[i];
+  // 16 indicator votes + 2 live-only whale votes (whale data has no history, so backtest uses the 16 only)
+  const allVotes = Core.votes(cs, ind, i, P).concat([Whale.spotVote(Whale.sum(wbook, sym, Date.now(), 3600e3)), fut?.vote ?? null]);
+  const sig = Core.signalAt(cs, ind, i, P), sc = Core.score(allVotes);
   $('liveTitle').innerHTML = sig ? `กำลังเกิด ${dirTxt(sig.dir)}` : `<span class="${scoreCls(sc)}">${sc == null ? '–' : sc >= 30 ? 'แนวโน้มขึ้น' : sc <= -30 ? 'แนวโน้มลง' : 'ไซด์เวย์ / ไม่ชัด'}</span> <span class="m" style="font-size:15px">· ยังไม่มีสัญญาณ</span>`;
   $('scoreTxt').innerHTML = `<span class="${scoreCls(sc)}">${fmt(sc, 0)}</span>`;
   const f = $('gaugeFill'), w = Math.abs(sc || 0) / 2;
   f.style.left = (sc >= 0 ? 50 : 50 - w) + '%'; f.style.width = w + '%'; f.style.background = sc >= 0 ? 'var(--up)' : 'var(--dn)';
   const kv = [['ราคา', fmt(c.close)], ['RSI', fmt(ind.rsi[i], 1)], ['ADX', fmt(ind.adx.adx[i], 1)], ['ATR', fmt(ind.atr[i])]];
-  if (sig) kv.splice(1, 0, ['จุดเข้า (ถ้าปิดตอนนี้)', fmt(sig.entry)], ['SL', `<span class="r">${fmt(sig.sl)}</span>`], ['TP', `<span class="g">${fmt(sig.tp)}</span>`]);
+  if (sig) kv.splice(1, 0, ['จุดเข้า (ถ้าปิดตอนนี้)', fmt(sig.entry)], ['SL', `<span class="r">${fmt(sig.sl)}</span> ${distPct(sig, sig.sl)}`], ['TP', `<span class="g">${fmt(sig.tp)}</span> ${distPct(sig, sig.tp)}`]);
   kv.push(['อัปเดตล่าสุด', new Date().toLocaleTimeString('th-TH')]);
   $('liveKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
-  $('votes').innerHTML = Core.votes(cs, ind, i, P).map((v, k) => `<div><span class="m">${Core.VOTE_NAMES[k]}</span>${voteTxt(v)}</div>`).join('');
+  $('votes').innerHTML = allVotes.map((v, k) => `<div><span class="m">${VOTE_NAMES[k]}</span>${voteTxt(v)}</div>`).join('');
   if (sig && $('a_forming').checked) alertSig('กำลังก่อตัว', sig, c.time);
 }
 // Watchdog: REST fallback when WebSocket is silent
@@ -394,6 +424,99 @@ async function scanMTF() {
 }
 setInterval(scanMTF, 30000);
 $('mtf').onclick = e => { const tr = e.target.closest('tr[data-tf]'); if (tr && tr.dataset.tf !== tf) { $('tf').value = tr.dataset.tf; $('style').value = ''; load(); } };
+
+// ---- Whale tracker ----
+const VOTE_NAMES = Core.VOTE_NAMES.concat(['วาฬ Spot (1ชม.)', 'รายใหญ่ Futures']);
+const FAPI = 'https://fapi.binance.com';
+let wbook = store.get('whaleBook') || Whale.newBook(), wSyms = [], wws = null, wFeed = [], wPrice = {}, wDirty = true, fut = null, wallLines = [];
+const wMin = s => /^(BTC|ETH)USDT$/.test(s) ? P.whaleBig : P.whaleSmall;
+const wMerge = Whale.merger(o => {
+  if (o.usd < wMin(o.sym)) return;
+  Whale.add(wbook, o.sym, o.T, o.usd, o.isSell);
+  wFeed.unshift(o); if (wFeed.length > 40) wFeed.length = 40;
+  wDirty = true;
+  if (o.usd >= P.whaleAlert) notify(`วาฬ ${o.sym}: ${o.isSell ? 'SHORT' : 'LONG'} ${o.isSell ? 'ขาย' : 'ซื้อ'} ${Whale.usd(o.usd)} @ ${fmt(o.price)}`, o.isSell ? -1 : 1);
+});
+setInterval(() => wMerge.flushAll(), 500);
+async function getJSON(path, hosts = HOSTS) {
+  let err;
+  for (const h of hosts) {
+    try { const r = await fetch(h + path); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); } catch (e) { err = e; }
+  }
+  throw err;
+}
+async function startWhale() {
+  let tickers;
+  try { tickers = await getJSON('/api/v3/ticker/24hr'); } catch (e) { $('whaleNote').textContent = 'โหลดรายชื่อเหรียญไม่ได้: ' + e.message; return; }
+  tickers.forEach(t => wPrice[t.symbol] = +t.lastPrice);
+  const list = Whale.topSymbols(tickers, Math.max(1, Math.min(100, P.whaleN)), [sym]);
+  if (wws && list.join() === wSyms.join()) return;
+  wSyms = list;
+  if (wws) { wws.onclose = null; wws.close(); }
+  wws = new WebSocket('wss://stream.binance.com:9443/stream?streams=' + wSyms.map(s => s.toLowerCase() + '@aggTrade').join('/'));
+  wws.onmessage = ev => { const d = JSON.parse(ev.data).data; if (!d) return; wPrice[d.s] = +d.p; wMerge.push(d.s, d.T, +d.p, +d.q, d.m); };
+  wws.onclose = () => { wws = null; setTimeout(startWhale, 5000); };
+}
+function renderWhale() {
+  if (!wSyms.length) return;
+  const now = Date.now();
+  const rows = wSyms.map(s => ({ s, h: Whale.sum(wbook, s, now, 3600e3), m5: Whale.sum(wbook, s, now, 300e3), d: Whale.sum(wbook, s, now, 864e5) }))
+    .sort((a, b) => Math.abs(b.h.net) - Math.abs(a.h.net));
+  const cls = v => v > 0 ? 'g' : v < 0 ? 'r' : 'm';
+  const dirW = x => { const v = Whale.spotVote(x); return v == null ? '<span class="m">ไม่มีไม้ใหญ่</span>' : v > 0 ? '<span class="g">วาฬซื้อ</span>' : v < 0 ? '<span class="r">วาฬขาย</span>' : '<span class="m">สมดุล</span>'; };
+  $('whaleTbl').innerHTML = '<tr><th>เหรียญ</th><th>ราคา</th><th>ซื้อ 1ชม.</th><th>ขาย 1ชม.</th><th>สุทธิ 5น.</th><th>สุทธิ 1ชม.</th><th>สุทธิ 24ชม.</th><th>ทิศทาง 1ชม.</th></tr>' + rows.map(r =>
+    `<tr class="click ${r.s === sym ? 'sel' : ''}" data-s="${r.s}"><td><b>${r.s.replace('USDT', '')}</b></td><td class="num">${fmt(wPrice[r.s])}</td>
+     <td class="num g">${Whale.usd(r.h.buy)}</td><td class="num r">${Whale.usd(r.h.sell)}</td>
+     <td class="num ${cls(r.m5.net)}">${Whale.usd(r.m5.net)}</td><td class="num ${cls(r.h.net)}">${Whale.usd(r.h.net)}</td><td class="num ${cls(r.d.net)}">${Whale.usd(r.d.net)}</td><td>${dirW(r.h)}</td></tr>`).join('');
+  const old = Whale.oldest(wbook);
+  $('whaleNote').textContent = `ไม้ใหญ่ = ออเดอร์ Market ขั้นต่ำ ${Whale.usd(P.whaleBig)} (BTC/ETH) / ${Whale.usd(P.whaleSmall)} (อื่นๆ) · สแกน ${wSyms.length} เหรียญ · ข้อมูลสะสมตั้งแต่ ${old ? new Date(old).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) : '–'} (เก็บย้อนหลังได้ไม่เกิน 24 ชม. เฉพาะตอนเปิดโปรแกรม)`;
+  $('whaleFeed').innerHTML = wFeed.length ? '<tr><th>เวลา</th><th>เหรียญ</th><th>ฝั่ง</th><th>มูลค่า</th><th>ราคา</th></tr>' + wFeed.map(o =>
+    `<tr class="click" data-s="${o.sym}"><td class="num">${new Date(o.T).toLocaleTimeString('th-TH')}</td><td>${o.sym.replace('USDT', '')}</td><td class="${o.isSell ? 'r' : 'g'}">${o.isSell ? 'ขาย' : 'ซื้อ'}</td><td class="num">${Whale.usd(o.usd)}</td><td class="num">${fmt(o.price)}</td></tr>`).join('') : '<tr><td class="m">รอไม้ใหญ่...</td></tr>';
+  const h = Whale.sum(wbook, sym, now, 3600e3), d = Whale.sum(wbook, sym, now, 864e5);
+  $('wsTitle').textContent = `วาฬใน ${sym}`;
+  $('whaleSpotKv').innerHTML = [['วาฬซื้อ 1ชม.', `<span class="g">${Whale.usd(h.buy)}</span> (${h.nb} ไม้)`], ['วาฬขาย 1ชม.', `<span class="r">${Whale.usd(h.sell)}</span> (${h.ns} ไม้)`], ['สุทธิ 1ชม.', `<span class="${cls(h.net)}">${Whale.usd(h.net)}</span>`], ['สุทธิ 24ชม.', `<span class="${cls(d.net)}">${Whale.usd(d.net)}</span>`]]
+    .map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
+  wDirty = false;
+}
+setInterval(() => { if (wDirty) renderWhale(); }, 2000);
+setInterval(() => { wDirty = true; Whale.prune(wbook, Date.now()); store.set('whaleBook', wbook); }, 60000);
+setInterval(startWhale, 15 * 60000); // refresh top-volume list
+['whaleTbl', 'whaleFeed'].forEach(id => $(id).onclick = e => { const tr = e.target.closest('tr[data-s]'); if (tr && tr.dataset.s !== sym) { $('sym').value = tr.dataset.s; load(); } });
+
+async function updateFutures() {
+  const s = sym, q = `?symbol=${s}&period=5m&limit=13`;
+  try {
+    const [top, global, oi, taker] = await Promise.all(['topLongShortPositionRatio', 'globalLongShortAccountRatio', 'openInterestHist', 'takerlongshortRatio']
+      .map(e => getJSON(`/futures/data/${e}${q}`, [FAPI])));
+    if (s !== sym) return;
+    fut = Whale.futuresSummary({ top, global, oi, taker });
+    const pct = v => fmt(v, 1) + '%', chg = v => v == null ? '' : ` <span class="${v > 0 ? 'g' : v < 0 ? 'r' : 'm'}">(${v > 0 ? '+' : ''}${fmt(v, 2)})</span>`;
+    $('futKv').innerHTML = [['รายใหญ่ถือ Long', fut.topLong == null ? '–' : pct(fut.topLong) + chg(fut.topLongChg)], ['รายย่อยถือ Long', fut.retailLong == null ? '–' : pct(fut.retailLong) + chg(fut.retailChg)],
+      ['Open Interest', Whale.usd(fut.oiUsd) + (fut.oiChg == null ? '' : chg(fut.oiChg) + '%')], ['แรงซื้อ/ขาย Market', fmt(fut.takerRatio, 2)]]
+      .map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
+    $('futNotes').innerHTML = fut.notes.map(([c, t]) => `<div class="${c}">• ${t}</div>`).join('') || '<span class="m">ยังไม่มีความเปลี่ยนแปลงชัดเจน</span>';
+  } catch (e) {
+    if (s !== sym) return;
+    fut = null;
+    $('futKv').innerHTML = '<span class="m">ไม่มีข้อมูล Futures ของเหรียญนี้</span><span></span>'; $('futNotes').innerHTML = '';
+  }
+}
+setInterval(updateFutures, 60000);
+
+async function updateWalls() {
+  const s = sym;
+  try {
+    const depth = await getJSON(`/api/v3/depth?symbol=${s}&limit=1000`);
+    if (s !== sym || !cs.length) return;
+    const w = Whale.walls(depth, cs[cs.length - 1].close);
+    wallLines.forEach(l => candle.removePriceLine(l)); wallLines = [];
+    const kv = [['แรงซื้อรอ (Bid)', `<span class="g">${Whale.usd(w.bidUsd)}</span>`], ['แรงขายรอ (Ask)', `<span class="r">${Whale.usd(w.askUsd)}</span>`], ['ความไม่สมดุล', `<span class="${w.imbalance > 0 ? 'g' : 'r'}">${fmt(w.imbalance, 1)}%</span>`]];
+    w.asks.forEach((x, k) => { kv.push([`กำแพงขาย ${k + 1}`, `<span class="r">${fmt(x.price)}</span> ${Whale.usd(x.usd)} (+${fmt(x.dist, 2)}%)`]); wallLines.push(candle.createPriceLine({ price: x.price, color: 'rgba(239,83,80,.6)', lineWidth: 1, lineStyle: 3, axisLabelVisible: false, title: 'Ask ' + Whale.usd(x.usd) })); });
+    w.bids.forEach((x, k) => { kv.push([`กำแพงซื้อ ${k + 1}`, `<span class="g">${fmt(x.price)}</span> ${Whale.usd(x.usd)} (${fmt(x.dist, 2)}%)`]); wallLines.push(candle.createPriceLine({ price: x.price, color: 'rgba(38,166,154,.6)', lineWidth: 1, lineStyle: 3, axisLabelVisible: false, title: 'Bid ' + Whale.usd(x.usd) })); });
+    $('wallKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
+  } catch (e) { if (s === sym) $('wallKv').innerHTML = `<span class="m">โหลดไม่ได้: ${e.message}</span><span></span>`; }
+}
+setInterval(updateWalls, 30000);
 
 // ---- Paper trading ----
 const pKey = () => `paper:${sym}:${tf}`;

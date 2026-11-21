@@ -1,7 +1,7 @@
 const { app, BrowserWindow, session, shell, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 
-const BINANCE = ['https://api.binance.com/*', 'https://data-api.binance.vision/*'];
+const BINANCE = ['https://api.binance.com/*', 'https://data-api.binance.vision/*', 'https://fapi.binance.com/*'];
 let win;
 
 function setupUpdater() {

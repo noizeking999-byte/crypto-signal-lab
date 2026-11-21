@@ -279,8 +279,14 @@ const Core = (() => {
     position: { name: 'Position (ยาว)', tf: '1d', slAtr: 2.5, tpR: 3 }
   };
 
+  // SL distance = ATR × slAtr, but never below minSl % of price, and wide enough that
+  // the TP distance is at least minEdge × round-trip costs (fees + slippage, both sides)
+  function minRiskPct(p) {
+    const roundTrip = 2 * ((p.fee || 0) + (p.slip || 0));
+    return Math.max(p.minSl || 0, (p.minEdge || 0) * roundTrip / (p.tpR || 1));
+  }
   function levels(dir, entry, atrV, p) {
-    const risk = atrV * p.slAtr;
+    const risk = Math.max(atrV * p.slAtr, entry * minRiskPct(p) / 100);
     return { dir, entry, sl: entry - dir * risk, tp: entry + dir * risk * p.tpR };
   }
   function signalAt(cs, ind, i, p) {
@@ -367,7 +373,7 @@ const Core = (() => {
   }
 
   return { sma, ema, rma, rsi, atr, macd, bollinger, stoch, adx, supertrend, ichimoku, psar, cci, willr, mfi, obv, vwap, donchian,
-    VOTE_NAMES, STRATS, STYLES, indicators, votes, score, levels, signalAt,
+    VOTE_NAMES, STRATS, STYLES, indicators, votes, score, minRiskPct, levels, signalAt,
     newState, openPos, closePos, checkBar, checkPrice, unreal, step, backtest, stats, compareAll };
 })();
 if (typeof module !== 'undefined') module.exports = Core;
