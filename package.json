@@ -1,0 +1,27 @@
+{
+  "name": "crypto-signal-lab",
+  "productName": "Crypto Signal Lab",
+  "version": "1.0.0",
+  "description": "Crypto signal analysis, backtest and paper trading",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never",
+    "release": "electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "6.3.9"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.noizeking.cryptosignallab",
+    "productName": "Crypto Signal Lab",
+    "files": ["main.js", "index.html", "lw.js", "package.json"],
+    "win": { "target": "nsis" },
+    "nsis": { "oneClick": true, "perMachine": false },
+    "publish": [{ "provider": "github", "owner": "noizeking999-byte", "repo": "crypto-signal-lab", "releaseType": "release" }]
+  }
+}

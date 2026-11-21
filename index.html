@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crypto Signal Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0e1116;--panel:#161b22;--line:#2a313c;--ink:#e6edf3;--mute:#8b96a5;--up:#26a69a;--dn:#ef5350;--acc:#f0b90b}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "IBM Plex Sans Thai",system-ui,sans-serif}
+.num{font-family:"IBM Plex Mono",monospace;white-space:nowrap}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0 12px 0 0}
+input,select,button{font:inherit;font-size:15px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:7px 10px;min-height:38px}
+input{width:110px}button{cursor:pointer}button:hover{border-color:var(--mute)}
+button.pri{background:var(--acc);color:#111;border-color:var(--acc);font-weight:600}
+button.up{background:var(--up);border-color:var(--up);color:#fff}button.dn{background:var(--dn);border-color:var(--dn);color:#fff}
+#status{color:var(--mute);font-size:13px;margin-left:auto}
+main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:12px;padding:12px 16px}
+@media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
+#chart{height:480px}#eqchart{height:160px}
+.sig{font-size:28px;font-weight:600;margin:2px 0 8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px}.kv span:nth-child(odd){color:var(--mute)}.kv span:nth-child(even){text-align:right}
+h2{font-size:15px;margin:0 0 10px;color:var(--mute);font-weight:600}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px}
+.stats div{background:var(--bg);border-radius:6px;padding:8px}.stats b{display:block;font-size:18px}.stats small{color:var(--mute)}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:right}th{color:var(--mute);font-weight:400}td:first-child,th:first-child{text-align:left}
+.scroll{max-height:320px;overflow:auto}
+.g{color:var(--up)}.r{color:var(--dn)}.m{color:var(--mute)}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+details label{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0}details input{width:90px}
+.note{font-size:12px;color:var(--mute);margin-top:8px}
+.col{display:grid;gap:12px;align-content:start}
+</style>
+</head>
+<body>
+<header>
+  <h1>Crypto Signal Lab</h1>
+  <input id="sym" value="BTCUSDT" aria-label="คู่เหรียญ">
+  <select id="tf" aria-label="Timeframe"><option>5m</option><option>15m</option><option selected>1h</option><option>4h</option><option>1d</option></select>
+  <select id="bars" aria-label="จำนวนแท่ง"><option value="1000">1000 แท่ง</option><option value="2000" selected>2000 แท่ง</option><option value="5000">5000 แท่ง</option></select>
+  <button class="pri" id="load">โหลด / วิเคราะห์</button>
+  <span id="status">ยังไม่ได้โหลดข้อมูล</span>
+</header>
+<main>
+  <div class="col">
+    <div class="card"><div id="chart"></div></div>
+    <div class="card">
+      <h2>Backtest (จำลองย้อนหลังบนข้อมูลที่โหลด)</h2>
+      <div class="stats" id="btStats"></div>
+      <div id="eqchart"></div>
+      <div class="scroll"><table id="btTable"></table></div>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card">
+      <h2>สัญญาณล่าสุด (แท่งที่ปิดแล้ว)</h2>
+      <div class="sig" id="sigTitle">–</div>
+      <div class="kv" id="sigKv"></div>
+      <div class="note">สัญญาณคิดจากแท่งที่ปิดแล้วเท่านั้น (ไม่ repaint)</div>
+    </div>
+    <div class="card">
+      <h2>วิเคราะห์ Real-time (แท่งปัจจุบัน ยังไม่ปิด)</h2>
+      <div class="sig" id="liveTitle" style="font-size:22px">–</div>
+      <div class="kv" id="liveKv"></div>
+      <div class="note" id="liveNote">อัปเดตทุกครั้งที่ราคาเปลี่ยน (สูงสุดวินาทีละครั้ง) · สัญญาณนี้อาจหายไปก่อนแท่งปิด</div>
+    </div>
+    <div class="card">
+      <h2>Paper Trading (เทรดจำลองกับราคาจริงแบบ real-time)</h2>
+      <div class="row"><button class="pri" id="ptStart">เริ่ม Auto</button><button id="ptStop">หยุด</button><button id="ptReset">รีเซ็ต</button></div>
+      <div class="row"><button class="up" id="mLong">Long</button><button class="dn" id="mShort">Short</button><button id="mClose">ปิดสถานะ</button></div>
+      <div class="kv" id="ptKv"></div>
+      <div class="scroll"><table id="ptTable"></table></div>
+      <div class="note">Auto = เปิด/ปิดตามสัญญาณเมื่อแท่งปิด, Long/Short = เปิดเองที่ราคาปัจจุบัน (SL/TP ตั้งตาม ATR) · ข้อมูลเก็บในเบราว์เซอร์นี้</div>
+    </div>
+    <div class="card">
+      <details open><summary>ตั้งค่ากลยุทธ์</summary>
+        <label>EMA เร็ว <input type="number" id="p_fast" value="20"></label>
+        <label>EMA ช้า <input type="number" id="p_slow" value="50"></label>
+        <label>EMA เทรนด์ <input type="number" id="p_trend" value="200"></label>
+        <label>RSI <input type="number" id="p_rsi" value="14"></label>
+        <label>ATR <input type="number" id="p_atr" value="14"></label>
+        <label>SL = ATR × <input type="number" step="0.1" id="p_slAtr" value="1.5"></label>
+        <label>TP = SL × (R) <input type="number" step="0.1" id="p_tpR" value="2"></label>
+        <label>เสี่ยงต่อไม้ (%) <input type="number" step="0.1" id="p_risk" value="1"></label>
+        <label>เลเวอเรจสูงสุด <input type="number" step="1" id="p_lev" value="1"></label>
+        <label>ค่าธรรมเนียม/ข้าง (%) <input type="number" step="0.01" id="p_fee" value="0.1"></label>
+        <label>ทุนเริ่มต้น (USDT) <input type="number" id="p_bal" value="1000"></label>
+        <label>เปิด Short ได้ <input type="checkbox" id="p_shorts" checked style="width:auto"></label>
+        <label>ออกเมื่อสัญญาณกลับตัว <input type="checkbox" id="p_exitOpp" checked style="width:auto"></label>
+        <button id="apply" style="width:100%">ใช้ค่าใหม่ + คำนวณใหม่</button>
+      </details>
+      <div class="note">กลยุทธ์: ราคาเหนือ EMA เทรนด์ + EMA เร็วตัดขึ้น EMA ช้า + RSI&gt;50 → Long (กลับด้านสำหรับ Short) · เครื่องมือทดสอบระบบ ไม่ใช่คำแนะนำการลงทุน</div>
+    </div>
+  </div>
+</main>
+
+<script src="lw.js"></script>
+
+<!-- Core: pure logic (no DOM) -->
+<script id="core">
+const Core = (() => {
+  function ema(src, n) {
+    const out = new Array(src.length).fill(null), k = 2 / (n + 1);
+    let prev = null, sum = 0;
+    for (let i = 0; i < src.length; i++) {
+      if (i < n - 1) { sum += src[i]; continue; }
+      if (i === n - 1) { sum += src[i]; prev = sum / n; } else prev = src[i] * k + prev * (1 - k);
+      out[i] = prev;
+    }
+    return out;
+  }
+  function rsi(c, n) {
+    const out = new Array(c.length).fill(null);
+    let g = 0, l = 0;
+    const calc = () => (l === 0 ? 100 : 100 - 100 / (1 + g / l));
+    for (let i = 1; i < c.length; i++) {
+      const d = c[i] - c[i - 1], up = Math.max(d, 0), dn = Math.max(-d, 0);
+      if (i <= n) { g += up; l += dn; if (i === n) { g /= n; l /= n; out[i] = calc(); } }
+      else { g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n; out[i] = calc(); }
+    }
+    return out;
+  }
+  function atr(h, l, c, n) {
+    const out = new Array(c.length).fill(null);
+    let prev = null, sum = 0;
+    for (let i = 0; i < c.length; i++) {
+      const tr = i === 0 ? h[i] - l[i] : Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1]));
+      if (i < n - 1) { sum += tr; continue; }
+      if (i === n - 1) { sum += tr; prev = sum / n; } else prev = (prev * (n - 1) + tr) / n;
+      out[i] = prev;
+    }
+    return out;
+  }
+  function indicators(cs, p) {
+    const c = cs.map(x => x.close), h = cs.map(x => x.high), l = cs.map(x => x.low);
+    return { fast: ema(c, p.fast), slow: ema(c, p.slow), trend: ema(c, p.trend), rsi: rsi(c, p.rsi), atr: atr(h, l, c, p.atr) };
+  }
+  function levels(dir, entry, atrV, p) {
+    const risk = atrV * p.slAtr;
+    return { dir, entry, sl: entry - dir * risk, tp: entry + dir * risk * p.tpR };
+  }
+  // Signal on closed bar i; null if none
+  function signalAt(cs, ind, i, p) {
+    if (i < 1) return null;
+    const f = ind.fast, s = ind.slow, t = ind.trend[i], r = ind.rsi[i], a = ind.atr[i];
+    if ([f[i], f[i - 1], s[i], s[i - 1], t, r, a].some(v => v == null)) return null;
+    const c = cs[i].close;
+    if (f[i] > s[i] && f[i - 1] <= s[i - 1] && c > t && r > 50) return levels(1, c, a, p);
+    if (f[i] < s[i] && f[i - 1] >= s[i - 1] && c < t && r < 50) return levels(-1, c, a, p);
+    return null;
+  }
+  function newState(balance) { return { start: balance, equity: balance, pos: null, trades: [], curve: [], lastTime: null }; }
+  function openPos(st, lv, time, p, src) {
+    const dist = Math.abs(lv.entry - lv.sl);
+    if (!(dist > 0) || st.equity <= 0) return;
+    let qty = (st.equity * p.risk / 100) / dist;
+    qty = Math.min(qty, st.equity * p.lev / lv.entry);
+    st.pos = { ...lv, qty, time, riskAmt: qty * dist, src };
+  }
+  function closePos(st, time, price, reason, p) {
+    const ps = st.pos;
+    const pnl = (price - ps.entry) * ps.qty * ps.dir - (ps.entry + price) * ps.qty * p.fee / 100;
+    st.equity += pnl;
+    st.trades.push({ dir: ps.dir, entry: ps.entry, sl: ps.sl, tp: ps.tp, time: ps.time, src: ps.src, exit: price, exitTime: time, reason, pnl, r: pnl / ps.riskAmt });
+    st.pos = null;
+  }
+  // SL/TP check against a bar (gap-aware). SL checked first = conservative when both hit.
+  function checkBar(st, bar, p) {
+    const ps = st.pos;
+    if (!ps || bar.time <= ps.time) return;
+    if (ps.dir === 1 ? bar.low <= ps.sl : bar.high >= ps.sl)
+      return closePos(st, bar.time, ps.dir === 1 ? Math.min(bar.open, ps.sl) : Math.max(bar.open, ps.sl), 'SL', p);
+    if (ps.dir === 1 ? bar.high >= ps.tp : bar.low <= ps.tp)
+      return closePos(st, bar.time, ps.dir === 1 ? Math.max(bar.open, ps.tp) : Math.min(bar.open, ps.tp), 'TP', p);
+  }
+  // Live tick check (paper trading)
+  function checkPrice(st, price, time, p) {
+    const ps = st.pos;
+    if (!ps) return;
+    if (ps.dir === 1 ? price <= ps.sl : price >= ps.sl) return closePos(st, time, price, 'SL', p);
+    if (ps.dir === 1 ? price >= ps.tp : price <= ps.tp) return closePos(st, time, price, 'TP', p);
+  }
+  function unreal(st, price) { const ps = st.pos; return ps ? (price - ps.entry) * ps.qty * ps.dir : 0; }
+  // Process one closed bar
+  function step(st, cs, ind, i, p, auto = true) {
+    const bar = cs[i];
+    checkBar(st, bar, p);
+    const sig = signalAt(cs, ind, i, p);
+    if (auto && sig) {
+      if (st.pos && sig.dir !== st.pos.dir && p.exitOpp) closePos(st, bar.time, bar.close, 'กลับตัว', p);
+      if (!st.pos && (sig.dir === 1 || p.shorts)) openPos(st, sig, bar.time, p, 'auto');
+    }
+    st.curve.push({ time: bar.time, value: st.equity + unreal(st, bar.close) });
+    st.lastTime = bar.time;
+  }
+  function backtest(cs, ind, p, lastClosed) {
+    const st = newState(p.bal);
+    for (let i = 1; i <= lastClosed; i++) step(st, cs, ind, i, p);
+    return st;
+  }
+  function stats(st) {
+    const t = st.trades, wins = t.filter(x => x.pnl > 0);
+    const gw = wins.reduce((a, x) => a + x.pnl, 0), gl = -t.filter(x => x.pnl <= 0).reduce((a, x) => a + x.pnl, 0);
+    let peak = -Infinity, dd = 0;
+    for (const c of st.curve) { peak = Math.max(peak, c.value); dd = Math.max(dd, (peak - c.value) / peak); }
+    return {
+      n: t.length, win: t.length ? wins.length / t.length * 100 : 0,
+      net: (st.equity - st.start) / st.start * 100, pf: gl > 0 ? gw / gl : (gw > 0 ? Infinity : 0),
+      dd: dd * 100, avgR: t.length ? t.reduce((a, x) => a + x.r, 0) / t.length : 0
+    };
+  }
+  return { ema, rsi, atr, indicators, signalAt, levels, newState, openPos, closePos, checkBar, checkPrice, unreal, step, backtest, stats };
+})();
+if (typeof module !== 'undefined') module.exports = Core;
+</script>
+
+<script>
+{
+const $ = id => document.getElementById(id);
+const HOSTS = ['https://api.binance.com', 'https://data-api.binance.vision'];
+const TZ = -new Date().getTimezoneOffset() * 60; // show local time on chart
+const fmt = (v, d) => v == null || !isFinite(v) ? '–' : Number(v).toLocaleString('en-US', { maximumFractionDigits: d ?? (Math.abs(v) >= 100 ? 2 : Math.abs(v) >= 1 ? 4 : 6) });
+const tstr = t => new Date(t * 1000).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+
+let P, cs = [], ind = null, sym = '', tf = '', ws = null, paper = null, paperOn = false, lines = [];
+
+function readParams() {
+  const n = id => parseFloat($('p_' + id).value);
+  return { fast: n('fast'), slow: n('slow'), trend: n('trend'), rsi: n('rsi'), atr: n('atr'), slAtr: n('slAtr'), tpR: n('tpR'), risk: n('risk'), lev: n('lev'), fee: n('fee'), bal: n('bal'), shorts: $('p_shorts').checked, exitOpp: $('p_exitOpp').checked };
+}
+const status = s => $('status').textContent = s;
+
+// ---- Chart ----
+const LC = window.LightweightCharts;
+const opts = { autoSize: true, layout: { background: { color: '#161b22' }, textColor: '#8b96a5' }, grid: { vertLines: { color: '#1f252e' }, horzLines: { color: '#1f252e' } }, timeScale: { timeVisible: true, borderColor: '#2a313c' }, rightPriceScale: { borderColor: '#2a313c' } };
+const chart = LC.createChart($('chart'), opts);
+const candle = chart.addCandlestickSeries({ upColor: '#26a69a', downColor: '#ef5350', wickUpColor: '#26a69a', wickDownColor: '#ef5350', borderVisible: false });
+const sFast = chart.addLineSeries({ color: '#f0b90b', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+const sSlow = chart.addLineSeries({ color: '#4c8dff', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+const sTrend = chart.addLineSeries({ color: '#b07cff', lineWidth: 2, priceLineVisible: false, lastValueVisible: false });
+const eqChart = LC.createChart($('eqchart'), { ...opts, timeScale: { ...opts.timeScale, visible: false } });
+const eqLine = eqChart.addLineSeries({ color: '#f0b90b', lineWidth: 2 });
+const toBar = c => ({ time: c.time + TZ, open: c.open, high: c.high, low: c.low, close: c.close });
+const toLine = arr => cs.map((c, i) => arr[i] == null ? null : { time: c.time + TZ, value: arr[i] }).filter(Boolean);
+
+// ---- Data ----
+async function fetchKlines(symbol, interval, total) {
+  let lastErr;
+  for (const host of HOSTS) {
+    try {
+      let out = [], end = null;
+      while (out.length < total) {
+        const lim = Math.min(1000, total - out.length);
+        const url = `${host}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${lim}` + (end ? `&endTime=${end}` : '');
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+        const rows = await r.json();
+        if (!rows.length) break;
+        out = rows.concat(out);
+        end = rows[0][0] - 1;
+        if (rows.length < lim) break;
+      }
+      return out.map(k => ({ time: k[0] / 1000, open: +k[1], high: +k[2], low: +k[3], close: +k[4] }));
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
+}
+
+async function load() {
+  P = readParams();
+  sym = $('sym').value.trim().toUpperCase(); tf = $('tf').value;
+  status('กำลังโหลด...');
+  try { cs = await fetchKlines(sym, tf, +$('bars').value); }
+  catch (e) { status('โหลดไม่สำเร็จ: ' + e.message); return; }
+  if (cs.length < P.trend + 2) { status('ข้อมูลน้อยเกินไปสำหรับ EMA เทรนด์'); return; }
+  candle.setData(cs.map(toBar));
+  recompute(true);
+  loadPaper();
+  lastMsg = Date.now();
+  liveAnalyze();
+  connectWS();
+  status(`${sym} ${tf} · ${cs.length} แท่ง · live`);
+}
+
+function recompute(full) {
+  ind = Core.indicators(cs, P);
+  sFast.setData(toLine(ind.fast)); sSlow.setData(toLine(ind.slow)); sTrend.setData(toLine(ind.trend));
+  if (full) runBacktest();
+  renderSignal();
+}
+const lastClosed = () => cs.length - 2; // last element is the still-open candle
+
+// ---- Backtest ----
+let btMarkers = [];
+function runBacktest() {
+  const st = Core.backtest(cs, ind, P, lastClosed());
+  const s = Core.stats(st);
+  $('btStats').innerHTML = [
+    ['จำนวนเทรด', s.n], ['Win rate', fmt(s.win, 1) + '%'], ['กำไรสุทธิ', `<span class="${s.net >= 0 ? 'g' : 'r'}">${fmt(s.net, 2)}%</span>`],
+    ['Profit factor', fmt(s.pf, 2)], ['Max drawdown', fmt(s.dd, 2) + '%'], ['เฉลี่ย R/ไม้', fmt(s.avgR, 2)]
+  ].map(([k, v]) => `<div><small>${k}</small><b class="num">${v}</b></div>`).join('');
+  eqLine.setData(st.curve.map(c => ({ time: c.time + TZ, value: c.value })));
+  eqChart.timeScale().fitContent();
+  $('btTable').innerHTML = tradeRows(st.trades.slice().reverse());
+  btMarkers = [];
+  for (const t of st.trades) {
+    btMarkers.push({ time: t.time + TZ, position: t.dir === 1 ? 'belowBar' : 'aboveBar', color: t.dir === 1 ? '#26a69a' : '#ef5350', shape: t.dir === 1 ? 'arrowUp' : 'arrowDown', text: t.dir === 1 ? 'L' : 'S' });
+    btMarkers.push({ time: t.exitTime + TZ, position: t.dir === 1 ? 'aboveBar' : 'belowBar', color: t.pnl > 0 ? '#26a69a' : '#ef5350', shape: 'circle', text: t.reason });
+  }
+  if (st.pos) btMarkers.push({ time: st.pos.time + TZ, position: st.pos.dir === 1 ? 'belowBar' : 'aboveBar', color: '#f0b90b', shape: st.pos.dir === 1 ? 'arrowUp' : 'arrowDown', text: 'เปิดอยู่' });
+  btMarkers.sort((a, b) => a.time - b.time);
+  candle.setMarkers(btMarkers);
+}
+function tradeRows(tr) {
+  if (!tr.length) return '<tr><td class="m">ยังไม่มีเทรด</td></tr>';
+  return '<tr><th>เข้า</th><th>ฝั่ง</th><th>ราคาเข้า</th><th>ราคาออก</th><th>ออกเพราะ</th><th>R</th><th>P/L</th></tr>' + tr.map(t =>
+    `<tr><td class="num">${tstr(t.time)}</td><td class="${t.dir === 1 ? 'g' : 'r'}">${t.dir === 1 ? 'Long' : 'Short'}</td><td class="num">${fmt(t.entry)}</td><td class="num">${fmt(t.exit)}</td><td>${t.reason}</td><td class="num">${fmt(t.r, 2)}</td><td class="num ${t.pnl >= 0 ? 'g' : 'r'}">${fmt(t.pnl, 2)}</td></tr>`).join('');
+}
+
+// ---- Latest signal ----
+function renderSignal() {
+  const i = lastClosed(), c = cs[i];
+  let sig = null, at = i;
+  for (let j = i; j > i - 5 && j > 0; j--) { sig = Core.signalAt(cs, ind, j, P); if (sig) { at = j; break; } }
+  const trendUp = c.close > ind.trend[i];
+  const price = cs[cs.length - 1].close;
+  let title, kv;
+  if (sig) {
+    title = `<span class="${sig.dir === 1 ? 'g' : 'r'}">${sig.dir === 1 ? 'LONG' : 'SHORT'}</span> <small class="m" style="font-size:13px">${i - at === 0 ? 'แท่งล่าสุด' : (i - at) + ' แท่งก่อน'}</small>`;
+    kv = [['จุดเข้า', fmt(sig.entry)], ['Stop loss', `<span class="r">${fmt(sig.sl)}</span>`], ['Take profit', `<span class="g">${fmt(sig.tp)}</span>`], ['R:R', '1 : ' + P.tpR]];
+  } else {
+    const hyp = Core.levels(trendUp ? 1 : -1, c.close, ind.atr[i], P);
+    title = '<span class="m">รอสัญญาณ</span>';
+    kv = [[`ถ้าเข้า ${trendUp ? 'Long' : 'Short'} ตอนนี้: SL`, fmt(hyp.sl)], ['TP', fmt(hyp.tp)]];
+    sig = null;
+  }
+  kv.push(['ราคาปัจจุบัน', fmt(price)], ['เทรนด์ (EMA ' + P.trend + ')', trendUp ? '<span class="g">ขาขึ้น</span>' : '<span class="r">ขาลง</span>'], ['RSI', fmt(ind.rsi[i], 1)], ['ATR', fmt(ind.atr[i])]);
+  $('sigTitle').innerHTML = title;
+  $('sigKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
+  drawLines(sig);
+}
+function drawLines(sig) {
+  lines.forEach(l => candle.removePriceLine(l)); lines = [];
+  const add = (price, color, title, style = 2) => lines.push(candle.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title }));
+  const ps = paper && paper.pos;
+  if (ps) { add(ps.entry, '#f0b90b', 'Paper เข้า', 0); add(ps.sl, '#ef5350', 'Paper SL', 0); add(ps.tp, '#26a69a', 'Paper TP', 0); }
+  else if (sig) { add(sig.entry, '#f0b90b', 'Entry'); add(sig.sl, '#ef5350', 'SL'); add(sig.tp, '#26a69a', 'TP'); }
+}
+
+// ---- Live feed ----
+function connectWS() {
+  if (ws) { ws.onclose = null; ws.close(); }
+  const s = sym.toLowerCase(), t = tf;
+  ws = new WebSocket(`wss://stream.binance.com:9443/ws/${s}@kline_${t}`);
+  ws.onmessage = ev => {
+    const k = JSON.parse(ev.data).k;
+    applyBar({ time: k.t / 1000, open: +k.o, high: +k.h, low: +k.l, close: +k.c });
+  };
+  ws.onclose = () => { status('การเชื่อมต่อหลุด กำลังต่อใหม่...'); setTimeout(() => { if (sym === s && tf === t) connectWS(); }, 3000); };
+  ws.onopen = () => status(`${sym} ${tf} · ${cs.length} แท่ง · live`);
+}
+// Shared by WebSocket and REST fallback
+let lastMsg = 0, liveTimer = null;
+function applyBar(bar) {
+  if (!cs.length) return;
+  lastMsg = Date.now();
+  const last = cs[cs.length - 1];
+  if (bar.time < last.time) return;
+  if (bar.time === last.time) cs[cs.length - 1] = bar;
+  else { cs.push(bar); onCandleClosed(); }
+  candle.update(toBar(bar));
+  if (paper) { const had = paper.pos; Core.checkPrice(paper, bar.close, bar.time, P); if (had && !paper.pos) { savePaper(); drawLines(null); } renderPaper(); }
+  if (!liveTimer) liveTimer = setTimeout(() => { liveTimer = null; liveAnalyze(); }, 1000);
+}
+// Re-analyze continuously on the forming candle (preview, not confirmed)
+function liveAnalyze() {
+  if (cs.length < 3) return;
+  ind = Core.indicators(cs, P);
+  const i = cs.length - 1, c = cs[i], t = c.time + TZ;
+  [[sFast, ind.fast], [sSlow, ind.slow], [sTrend, ind.trend]].forEach(([s, a]) => a[i] != null && s.update({ time: t, value: a[i] }));
+  const sig = Core.signalAt(cs, ind, i, P);
+  const up = c.close > ind.trend[i];
+  $('liveTitle').innerHTML = sig
+    ? `<span class="${sig.dir === 1 ? 'g' : 'r'}">กำลังเกิด ${sig.dir === 1 ? 'LONG' : 'SHORT'}</span>`
+    : (up ? '<span class="g">เทรนด์ขึ้น</span>' : '<span class="r">เทรนด์ลง</span>') + ' <span class="m" style="font-size:15px">· ยังไม่มีสัญญาณ</span>';
+  const gap = (ind.fast[i] - ind.slow[i]) / c.close * 100;
+  const kv = [['ราคา', fmt(c.close)], ['RSI', fmt(ind.rsi[i], 1)], ['EMA เร็ว − ช้า', `<span class="${gap >= 0 ? 'g' : 'r'}">${fmt(gap, 3)}%</span>`], ['ATR', fmt(ind.atr[i])]];
+  if (sig) kv.splice(1, 0, ['จุดเข้า (ถ้าปิดตอนนี้)', fmt(sig.entry)], ['SL', `<span class="r">${fmt(sig.sl)}</span>`], ['TP', `<span class="g">${fmt(sig.tp)}</span>`]);
+  kv.push(['อัปเดตล่าสุด', new Date().toLocaleTimeString('th-TH')]);
+  $('liveKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
+}
+// Watchdog: if WebSocket is silent > 10s, poll REST every 5s
+setInterval(async () => {
+  if (!cs.length || Date.now() - lastMsg < 10000) return;
+  try {
+    const rows = await fetchKlines(sym, tf, 2);
+    rows.forEach(applyBar);
+    status(`${sym} ${tf} · live (REST สำรอง)`);
+  } catch (e) { status('ดึงข้อมูลไม่ได้: ' + e.message); }
+}, 5000);
+function onCandleClosed() {
+  recompute(true);
+  const i = lastClosed();
+  if (paper && paperOn && cs[i].time > (paper.lastTime ?? 0)) { Core.step(paper, cs, ind, i, P, true); savePaper(); }
+  renderSignal(); renderPaper();
+}
+
+// ---- Paper trading ----
+const pKey = () => `paper:${sym}:${tf}`;
+function loadPaper() {
+  const saved = store.get(pKey());
+  paper = saved?.st || Core.newState(P.bal);
+  paperOn = !!saved?.on;
+  if (paperOn) { // catch up candles closed while page was closed
+    for (let i = 1; i <= lastClosed(); i++) if (cs[i].time > (paper.lastTime ?? Infinity)) Core.step(paper, cs, ind, i, P, true);
+    savePaper();
+  }
+  renderPaper(); renderSignal();
+}
+const savePaper = () => store.set(pKey(), { st: paper, on: paperOn });
+function renderPaper() {
+  if (!paper) return;
+  const price = cs[cs.length - 1]?.close, u = Core.unreal(paper, price), ps = paper.pos;
+  const kv = [['สถานะ Auto', paperOn ? '<span class="g">ทำงาน</span>' : '<span class="m">หยุด</span>'], ['เงินทุน', fmt(paper.equity, 2) + ' USDT'], ['กำไร/ขาดทุนรวม', `<span class="${paper.equity - paper.start >= 0 ? 'g' : 'r'}">${fmt((paper.equity - paper.start) / paper.start * 100, 2)}%</span>`]];
+  if (ps) kv.push(['ถือ', `<span class="${ps.dir === 1 ? 'g' : 'r'}">${ps.dir === 1 ? 'Long' : 'Short'}</span> ${fmt(ps.qty, 6)}`], ['ราคาเข้า', fmt(ps.entry)], ['SL', `<span class="r">${fmt(ps.sl)}</span>`], ['TP', `<span class="g">${fmt(ps.tp)}</span>`], ['P/L ลอย', `<span class="${u >= 0 ? 'g' : 'r'}">${fmt(u, 2)}</span>`]);
+  $('ptKv').innerHTML = kv.map(([k, v]) => `<span>${k}</span><span class="num">${v}</span>`).join('');
+  $('ptTable').innerHTML = tradeRows(paper.trades.slice().reverse());
+}
+function manual(dir) {
+  if (!paper || !cs.length) return;
+  if (paper.pos) { status('มีสถานะเปิดอยู่ ปิดก่อน'); return; }
+  const last = cs[cs.length - 1], a = ind.atr[lastClosed()];
+  Core.openPos(paper, Core.levels(dir, last.close, a, P), last.time, P, 'manual');
+  savePaper(); renderPaper(); drawLines(null);
+}
+$('mLong').onclick = () => manual(1);
+$('mShort').onclick = () => manual(-1);
+$('mClose').onclick = () => { if (paper?.pos) { const l = cs[cs.length - 1]; Core.closePos(paper, l.time, l.close, 'ปิดเอง', P); savePaper(); renderPaper(); renderSignal(); } };
+$('ptStart').onclick = () => { if (!paper) return; paperOn = true; paper.lastTime = cs[lastClosed()].time; savePaper(); renderPaper(); };
+$('ptStop').onclick = () => { paperOn = false; savePaper(); renderPaper(); };
+$('ptReset').onclick = () => { if (!cs.length) return; paper = Core.newState(P.bal); paperOn = false; savePaper(); renderPaper(); renderSignal(); };
+$('load').onclick = load;
+$('apply').onclick = () => { P = readParams(); if (cs.length) { recompute(true); liveAnalyze(); } };
+$('sym').onkeydown = e => { if (e.key === 'Enter') load(); };
+load();
+}
+</script>
+</body>
+</html>
