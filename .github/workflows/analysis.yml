@@ -1,0 +1,23 @@
+name: Analysis
+on:
+  push:
+    branches: [analysis]
+    paths: ['tools/*.js', 'core.js', '.github/workflows/analysis.yml']
+permissions:
+  contents: write
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node tools/analyze.js
+      - name: Commit results
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add tools/results.md tools/results.json
+          git commit -m "analysis results [skip ci]"
+          git push
